@@ -144,6 +144,7 @@ public sealed class MineGameManager : MonoBehaviour
         if (PlayerPrefs.GetInt("ContinueGame") == 1 && PlayerPrefs.HasKey("CurrentLevel"))
         {
             currentLevelIndex = PlayerPrefs.GetInt("CurrentLevel", 0);
+            score = PlayerPrefs.GetInt("Score", 0);
         }
         currentLevelIndex = Mathf.Clamp(currentLevelIndex, 0, LevelCount - 1);
 
