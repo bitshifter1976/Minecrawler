@@ -87,10 +87,10 @@ public sealed class MineGameHud : MonoBehaviour
                 "PAUSED",
 
             GameState.LevelCompleted =>
-                $"LEVEL {game.CurrentLevel} COMPLETE",
+                $"LEVEL {game.CurrentLevel} COMPLETE\n\n" + $"Final score: {game.Score}",
 
             GameState.GameOver =>
-                "GAME OVER\n\n" + game.Message,
+                "GAME OVER\n\n" + game.Message + $"\n\nFinal score: {game.Score}",
 
             GameState.Victory =>
                 "CONGRATULATIONS!\n\n" +

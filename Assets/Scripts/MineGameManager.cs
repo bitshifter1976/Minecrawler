@@ -176,13 +176,25 @@ public sealed class MineGameManager : MonoBehaviour
 
     private void OnRestart(InputAction.CallbackContext context)
     {
-        if (State == GameState.LevelReady)
+        switch (State)
         {
-            StartLevel();
-            return;
-        }
+            case GameState.Loading:
+                return;
 
-        RestartLevel();
+            case GameState.LevelReady:
+                StartLevel();
+                break;
+
+            case GameState.Victory:
+                StartNewGame();
+                break;
+
+            default:
+                score = PlayerPrefs.GetInt("Score", 0);
+                currentLevelIndex = PlayerPrefs.GetInt("CurrentLevel", 0);
+                LoadLevel(currentLevelIndex);
+                break;
+        }
     }
 
     private void ArmLevelStartInput()
@@ -232,23 +244,6 @@ public sealed class MineGameManager : MonoBehaviour
     {
         startInputSubscription?.Dispose();
         startInputSubscription = null;
-    }
-
-    public void RestartLevel()
-    {
-        switch (State)
-        {
-            case GameState.Loading:
-                return;
-
-            case GameState.Victory:
-                StartNewGame();
-                break;
-
-            default:
-                LoadLevel(currentLevelIndex);
-                break;
-        }
     }
 
     public void StartNewGame()
@@ -567,14 +562,15 @@ public sealed class MineGameManager : MonoBehaviour
     {
         DisposeLevelStartInput();
         State = GameState.Victory;
-        PlayerPrefs.SetInt("CurrentLevel", 0);
-        PlayerPrefs.Save();
-        message = "Congratulations! You completed all 100 levels. Press R to start a new game.";
+        score = Math.Clamp(score-moves*3, 0, int.MaxValue);
+        SaveCurrentLevel();
+        message = "Congratulations! You completed this level. Final score: " + score;
     }
 
     private void SaveCurrentLevel()
     {
         PlayerPrefs.SetInt("CurrentLevel", currentLevelIndex);
+        PlayerPrefs.SetInt("Score", score);
         PlayerPrefs.Save();
     }
 
