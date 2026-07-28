@@ -512,10 +512,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
+    m_SelectOnUp: {fileID: 1458034768}
+    m_SelectOnDown: {fileID: 1536235172}
     m_SelectOnLeft: {fileID: 0}
     m_SelectOnRight: {fileID: 0}
   m_Transition: 2
@@ -997,7 +997,7 @@ MonoBehaviour:
   audioSource: {fileID: 582236900}
   selectClip: {fileID: 8300000, guid: 9f834e8aacf5e6d44a417bc9c01af097, type: 3}
   startClip: {fileID: 8300000, guid: 4076fc319fe704c4fb93bdc065b34985, type: 3}
-  mineVibesClip: {fileID: 8300000, guid: 668bd74bad1bc32429b4de928a970a24, type: 3}
+  musicClip: {fileID: 8300000, guid: f9e7e347827af624fb20c5a9a300babd, type: 3}
 --- !u!114 &1340787560
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1081,10 +1081,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
+    m_SelectOnUp: {fileID: 1536235172}
+    m_SelectOnDown: {fileID: 768460828}
     m_SelectOnLeft: {fileID: 0}
     m_SelectOnRight: {fileID: 0}
   m_Transition: 2
@@ -1202,10 +1202,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
   m_Navigation:
-    m_Mode: 3
+    m_Mode: 4
     m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
+    m_SelectOnUp: {fileID: 768460828}
+    m_SelectOnDown: {fileID: 1458034768}
     m_SelectOnLeft: {fileID: 0}
     m_SelectOnRight: {fileID: 0}
   m_Transition: 2

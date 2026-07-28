@@ -1,7 +1,5 @@
-using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -10,114 +8,82 @@ public class MenuController : MonoBehaviour
     public Button buttonNew;
     public Button buttonContinue;
     public Button buttonEnd;
+
     public AudioSource audioSource;
     public AudioClip selectClip;
     public AudioClip startClip;
-    public AudioClip mineVibesClip;
-    private MineControlsGenerated controls;
+    public AudioClip musicClip;
 
-    private void Awake()
-    {
-        controls = new MineControlsGenerated();
-    }
+    private GameObject lastSelectedObject;
 
     private void Start()
     {
-        audioSource.PlayOneShot(mineVibesClip);
-        buttonNew.Select();
+        if (musicClip != null)
+        {
+            audioSource.clip = musicClip;
+            audioSource.loop = true;
+            audioSource.Play();
+        }
+
         buttonNew.onClick.AddListener(OnNewGameClicked);
         buttonContinue.onClick.AddListener(OnContinueGameClicked);
         buttonEnd.onClick.AddListener(OnEndGameClicked);
+
+        EventSystem.current.SetSelectedGameObject(null);
+        EventSystem.current.SetSelectedGameObject(buttonNew.gameObject);
+
+        lastSelectedObject = buttonNew.gameObject;
     }
 
-    private void OnEndGameClicked()
+    private void Update()
     {
-        audioSource.PlayOneShot(startClip);
-        Application.Quit();
-    }
+        GameObject selectedObject =
+            EventSystem.current.currentSelectedGameObject;
 
-    private void OnContinueGameClicked()
-    {
-        audioSource.PlayOneShot(startClip);
-        PlayerPrefs.SetInt("ContinueGame", 1);
-        SceneManager.LoadScene("Game");
+        if (selectedObject != null &&
+            selectedObject != lastSelectedObject)
+        {
+            if (selectClip != null)
+                audioSource.PlayOneShot(selectClip);
+
+            lastSelectedObject = selectedObject;
+        }
+
+        // Die Maus kann die aktuelle Tastaturauswahl verlieren lassen.
+        // Sobald wieder eine Navigationstaste gedrückt wird,
+        // kümmert sich das InputSystemUIInputModule darum.
     }
 
     private void OnNewGameClicked()
     {
-        audioSource.PlayOneShot(startClip);
+        if (startClip != null)
+            audioSource.PlayOneShot(startClip);
+
         PlayerPrefs.SetInt("ContinueGame", 0);
         SceneManager.LoadScene("Game");
     }
 
-    private void OnEnable()
+    private void OnContinueGameClicked()
     {
-        controls.Menu.Select.performed += OnMove;
-        controls.Menu.Enable();
+        if (startClip != null)
+            audioSource.PlayOneShot(startClip);
+
+        PlayerPrefs.SetInt("ContinueGame", 1);
+        SceneManager.LoadScene("Game");
     }
 
-    private void OnMove(InputAction.CallbackContext context)
+    private void OnEndGameClicked()
     {
-        audioSource.PlayOneShot(selectClip);
-        var input = context.ReadValue<Vector2>();
-        if (input != null) 
-        {
-            if (input.x > 0 || input.y > 0)
-            {
-                SetPreviousButtonActive();
-            }
-            else
-            {
-                SetNextButtonActive();
-            }
-        }
-    }
+        if (startClip != null)
+            audioSource.PlayOneShot(startClip);
 
-    private void SetPreviousButtonActive()
-    {
-        if (EventSystem.current.currentSelectedGameObject == buttonNew.gameObject)
-        {
-            buttonEnd.Select();
-        }
-        else if (EventSystem.current.currentSelectedGameObject == buttonContinue.gameObject)
-        {
-            buttonNew.Select();
-        }
-        else if (EventSystem.current.currentSelectedGameObject == buttonEnd.gameObject)
-        {
-            buttonContinue.Select();
-        }
-    }
-
-    private void SetNextButtonActive()
-    {
-        if (EventSystem.current.currentSelectedGameObject == buttonNew.gameObject)
-        {
-            buttonContinue.Select();
-        }
-        else if (EventSystem.current.currentSelectedGameObject == buttonContinue.gameObject)
-        {
-            buttonEnd.Select();
-        }
-        else if (EventSystem.current.currentSelectedGameObject == buttonEnd.gameObject)
-        {
-            buttonNew.Select();
-        }
-    }
-
-    private void OnDisable()
-    {
-        if (controls == null)
-            return;
-        controls.Menu.Select.performed -= OnMove;
-        controls.Menu.Disable();
-        buttonNew.onClick.RemoveListener(OnNewGameClicked);
-        buttonContinue.onClick.RemoveListener(OnContinueGameClicked);
-        buttonEnd.onClick.RemoveListener(OnEndGameClicked);
+        Application.Quit();
     }
 
     private void OnDestroy()
     {
-        controls?.Dispose();
+        buttonNew.onClick.RemoveListener(OnNewGameClicked);
+        buttonContinue.onClick.RemoveListener(OnContinueGameClicked);
+        buttonEnd.onClick.RemoveListener(OnEndGameClicked);
     }
 }

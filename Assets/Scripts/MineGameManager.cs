@@ -213,7 +213,7 @@ public sealed class MineGameManager : MonoBehaviour
         exitDirection = Vector2Int.zero;
         State = GameState.Playing;
         message = "Collect all coal and destroy all breakable rocks. The exit will open afterwards.";
-        audioSource.clip = Resources.Load<AudioClip>("Audio/ambience");
+        audioSource.clip = Resources.Load<AudioClip>("Audio/MinecrawlerNoVoice");
         audioSource.loop = true;
         audioSource.Play();
     }
