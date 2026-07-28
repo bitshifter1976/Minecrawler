@@ -205,8 +205,7 @@ public sealed class MineGameManager : MonoBehaviour
         startInputSubscription =
             InputSystem.onAnyButtonPress.Call(control =>
             {
-                if (control.device is Keyboard ||
-                    control.device is Gamepad)
+                if (control.device is Keyboard || control.device is Gamepad || control.device is Mouse)
                 {
                     StartLevel();
                 }

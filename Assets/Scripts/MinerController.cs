@@ -18,6 +18,7 @@ public sealed class MinerController : GridActor
     private void OnEnable()
     {
         controls.Gameplay.Move.performed += OnMove;
+        controls.Gameplay.Click.performed += OnPointerPressed;
         controls.Gameplay.Enable();
 
         moveTimer = 0f;
@@ -29,6 +30,7 @@ public sealed class MinerController : GridActor
             return;
 
         controls.Gameplay.Move.performed -= OnMove;
+        controls.Gameplay.Click.performed -= OnPointerPressed;
         controls.Gameplay.Disable();
     }
 
@@ -59,19 +61,58 @@ public sealed class MinerController : GridActor
         MineGameManager game = MineGameManager.Instance;
         game?.RequestLevelStart();
         Vector2 input = context.ReadValue<Vector2>();
+        Vector2Int newDirection = Vector2Int.zero;
         if (Mathf.Abs(input.x) > Mathf.Abs(input.y))
         {
-            moveDirection = input.x > 0f
+            newDirection = input.x > 0f
                 ? Vector2Int.right
                 : Vector2Int.left;
         }
         else if (Mathf.Abs(input.y) > 0.01f)
         {
-            moveDirection = input.y > 0f
+            newDirection = input.y > 0f
                 ? Vector2Int.up
                 : Vector2Int.down;
         }
-        UpdateRotation();
+        if (!IsOppositeDirection(newDirection))
+        {
+            moveDirection = newDirection;
+            UpdateRotation();
+        }
+    }
+    private void OnPointerPressed(InputAction.CallbackContext context)
+    {
+        Vector2 screenPosition =
+            controls.Gameplay.Point.ReadValue<Vector2>();
+
+        Camera camera = Camera.main;
+
+        if (camera == null)
+            return;
+
+        var worldPosition = camera.ScreenToWorldPoint(screenPosition);
+        var minerPosition = transform.position;
+        var difference = new Vector2(worldPosition.x - minerPosition.x, worldPosition.y - minerPosition.y);
+        Vector2Int newDirection = Vector2Int.zero;
+        if (Mathf.Abs(difference.x) > Mathf.Abs(difference.y))
+        {
+            newDirection = difference.x > 0f
+                ? Vector2Int.right
+                : Vector2Int.left;
+        }
+        else
+        {
+            newDirection = difference.y > 0f
+                ? Vector2Int.up
+                : Vector2Int.down;
+        }
+
+        if (!IsOppositeDirection(newDirection))
+        {
+            moveDirection = newDirection;
+            UpdateRotation();
+        }
+
     }
 
     private void UpdateRotation()
@@ -85,5 +126,9 @@ public sealed class MinerController : GridActor
             _ => 0f
         };
         transform.rotation = Quaternion.Euler(0f, 0f, angle);
+    }
+    private bool IsOppositeDirection(Vector2Int newDirection)
+    {
+        return newDirection == -moveDirection;
     }
 }
