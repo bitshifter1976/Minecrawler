@@ -12,7 +12,6 @@ public sealed class MineGameManager : MonoBehaviour
 
     private MineControls controls;
     private MineBoard board;
-    private MineTail tail;
 
     private Coroutine levelTransitionCoroutine;
     private AudioSource audioSource;
@@ -87,7 +86,6 @@ public sealed class MineGameManager : MonoBehaviour
         audioSource = audioSources.Length > 0 ? audioSources[0] : null;
         audioSourceFx = audioSources.Length > 1 ? audioSources[1] : null;
 
-        tail = new MineTail();
         Sprite fallbackSprite = CreateSquareSprite();
         var wallSprite = Resources.Load<Sprite>("Art/Wall");
         if (wallSprite == null)
@@ -137,8 +135,14 @@ public sealed class MineGameManager : MonoBehaviour
             Debug.LogWarning("No miner sprite assigned. Using the fallback square sprite.");
             minerSprite = fallbackSprite;
         }
+        var keySprite = Resources.Load<Sprite>("Art/Key");
+        if (keySprite == null)
+        {
+            Debug.LogWarning("No key sprite assigned. Using the fallback square sprite.");
+            keySprite = fallbackSprite;
+        }
 
-        board = new MineBoard(transform, fallbackSprite, wallSprite, rockSprite, coalSprite, floorSprite, doorClosedSprite, doorOpenSprite, cartSprite, minerSprite);
+        board = new MineBoard(transform, fallbackSprite, wallSprite, rockSprite, coalSprite, floorSprite, doorClosedSprite, doorOpenSprite, cartSprite, minerSprite, keySprite);
 
         currentLevelIndex = 0;
         if (PlayerPrefs.GetInt("ContinueGame") == 1 && PlayerPrefs.HasKey("CurrentLevel"))
@@ -166,6 +170,7 @@ public sealed class MineGameManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        board.RemoveKey();
         StopLevelTransition();
         DisposeLevelStartInput();
 
@@ -300,10 +305,12 @@ public sealed class MineGameManager : MonoBehaviour
         Time.timeScale = 1f;
 
         StopLevelTransition();
+
+        board.RemoveKey();
         currentLevelIndex = Mathf.Clamp(levelIndex, 0, LevelCount - 1);
         exitingLevel = false;
         exitDirection = Vector2Int.zero;
-        tail.Clear();
+        board.Tail.Clear();
 
         MineLevelData level = MineLevelLoader.Load(currentLevelIndex);
 
@@ -362,7 +369,7 @@ public sealed class MineGameManager : MonoBehaviour
             }
         }
 
-        if (tail.Contains(targetPosition))
+        if (board.Tail.Contains(targetPosition))
         {
             TriggerGameOver("You crashed into your own tail!");
             return false;
@@ -379,18 +386,26 @@ public sealed class MineGameManager : MonoBehaviour
             return true;
         }
 
-        Vector2Int newTailPosition = tail.GetNewSegmentPosition(currentPosition);
-        board.Miner.SetGridPosition(targetPosition);
+        Vector2Int newTailPosition =
+        board.Tail.GetNewSegmentPosition(currentPosition);
 
-        tail.Move(currentPosition);
+        board.Miner.SetGridPosition(targetPosition);
+        board.Tail.Move(currentPosition);
 
         moves++;
+
+        if (board.SpawnedKey != null && board.SpawnedKey.GridPosition == targetPosition)
+        {
+            audioSource.PlayOneShot(Resources.Load<AudioClip>("Audio/keyPickup"));
+            board.CollectKey();
+            audioSource.PlayOneShot(Resources.Load<AudioClip>("Audio/openDoor"), 2f);
+        }
 
         CoalPickup pickup = board.GetCoal(targetPosition);
 
         if (pickup != null)
         {
-            audioSourceFx.PlayOneShot(Resources.Load<AudioClip>("Audio/pickup"));
+            audioSource.PlayOneShot(Resources.Load<AudioClip>("Audio/pickup"));
             CollectCoal(pickup, newTailPosition);
         }
 
@@ -432,7 +447,7 @@ public sealed class MineGameManager : MonoBehaviour
         Vector2Int previousMinerPosition = board.Miner.GridPosition;
 
         board.Miner.SetGridPosition(targetPosition);
-        tail.Move(previousMinerPosition);
+        board.Tail.Move(previousMinerPosition);
 
         moves++;
         exitingLevel = true;
@@ -446,8 +461,8 @@ public sealed class MineGameManager : MonoBehaviour
         Vector2Int nextMinerPosition = currentMinerPosition + exitDirection;
 
         board.Miner.SetGridPosition(nextMinerPosition);
-        tail.Move(currentMinerPosition);
-        tail.RemoveOutside(board.Width, board.Height);
+        board.Tail.Move(currentMinerPosition);
+        board.Tail.RemoveOutside(board.Width, board.Height);
 
         moves++;
 
@@ -462,7 +477,7 @@ public sealed class MineGameManager : MonoBehaviour
                 minerRenderer.enabled = false;
         }
 
-        if (minerIsOutside && tail.IsEmpty)
+        if (minerIsOutside && board.Tail.IsEmpty)
         {
             exitingLevel = false;
             CompleteLevel();
@@ -494,7 +509,7 @@ public sealed class MineGameManager : MonoBehaviour
         collected++;
         score += 100 + collected * 10;
         TailSegment segment = board.CreateTailSegment(newTailPosition);
-        tail.Add(segment);
+        board.Tail.Add(segment);
 
         CheckLevelCleared();
     }
@@ -509,7 +524,8 @@ public sealed class MineGameManager : MonoBehaviour
     {
         if (board.IsLevelCleared)
         {
-            OpenExit();
+            board.SpawnKey();
+            message = "The exit key has appeared!";
             return;
         }
 

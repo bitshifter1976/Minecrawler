@@ -2,6 +2,7 @@
 using System.Drawing;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Audio;
 using UnityEngine.UIElements;
 using Color = UnityEngine.Color;
 
@@ -12,6 +13,7 @@ public sealed class MineBoard
     private readonly Sprite wallSprite;
     private readonly Sprite rockSprite;
     private readonly Sprite coalSprite;
+    private MineTail tail;
     private readonly HashSet<Vector2Int> walls = new();
     private readonly Dictionary<Vector2Int, CoalPickup> coal = new();
     private readonly Dictionary<Vector2Int, BreakableObstacle> obstacles = new();
@@ -21,6 +23,8 @@ public sealed class MineBoard
     private Sprite doorOpenSprite;
     private Sprite cartSprite;
     private Sprite minerSprite;
+    private Sprite keySprite;
+    private KeyPickup spawnedKey;
 
     public MinerController Miner { get; private set; }
     public Vector2Int ExitPosition { get; private set; }
@@ -31,8 +35,10 @@ public sealed class MineBoard
     public int RemainingCoal => coal.Count;
     public int RemainingObstacles => obstacles.Count;
     public bool IsLevelCleared => RemainingCoal == 0 && RemainingObstacles == 0;
+    public MineTail Tail => tail;
+    public KeyPickup SpawnedKey => spawnedKey;
 
-    public MineBoard(Transform parent, Sprite squareSprite, Sprite wallSprite, Sprite rockSprite, Sprite coalSprite, Sprite floorSprite, Sprite doorClosedSprite, Sprite doorOpenSprite, Sprite cartSprite, Sprite minerSprite)
+    public MineBoard(Transform parent, Sprite squareSprite, Sprite wallSprite, Sprite rockSprite, Sprite coalSprite, Sprite floorSprite, Sprite doorClosedSprite, Sprite doorOpenSprite, Sprite cartSprite, Sprite minerSprite, Sprite keySprite)
     {
         this.parent = parent;
         this.squareSprite = squareSprite;
@@ -44,6 +50,8 @@ public sealed class MineBoard
         this.doorOpenSprite = doorOpenSprite;
         this.cartSprite = cartSprite;
         this.minerSprite = minerSprite;
+        this.keySprite = keySprite;
+        tail = new MineTail();
     }
 
     public bool Build(MineLevelData level)
@@ -438,5 +446,90 @@ public sealed class MineBoard
         renderer.sortingOrder = order;
 
         return gameObject;
+    }
+    public void RemoveKey()
+    {
+        if (spawnedKey == null)
+            return;
+
+        GameObject.Destroy(spawnedKey.gameObject);
+        spawnedKey = null;
+    }
+
+    public void SpawnKey()
+    {
+        if (spawnedKey != null)
+            return;
+
+        var pos = FindFreeKeyPosition();
+        var keyTile = CreateTile("Key", pos, Color.yellow, 2, 0.5f, keySprite);
+        spawnedKey = keyTile.AddComponent<KeyPickup>();
+        spawnedKey.SetGridPosition(pos);
+    }
+
+    private Vector2Int FindFreeKeyPosition()
+    {
+        Vector2Int minerPosition = Miner.GridPosition;
+        Vector2Int bestPosition = minerPosition;
+        float bestDistance = -1f;
+
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                Vector2Int position = new(x, y);
+
+                if (!IsValidKeyPosition(position))
+                    continue;
+
+                float distance =
+                    Vector2Int.Distance(minerPosition, position);
+
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    bestPosition = position;
+                }
+            }
+        }
+
+        return bestPosition;
+    }
+
+    private bool IsValidKeyPosition(Vector2Int position)
+    {
+        if (!IsInside(position))
+            return false;
+
+        if (IsWall(position))
+            return false;
+
+        if (IsExit(position))
+            return false;
+
+        if (GetObstacle(position) != null)
+            return false;
+
+        if (GetCoal(position) != null)
+            return false;
+
+        if (tail.Contains(position))
+            return false;
+
+        if (Miner.GridPosition == position)
+            return false;
+
+        return true;
+    }
+
+    public void CollectKey()
+    {
+        if (spawnedKey == null)
+            return;
+
+        GameObject.Destroy(spawnedKey.gameObject);
+        spawnedKey = null;
+
+        OpenExit();
     }
 }
