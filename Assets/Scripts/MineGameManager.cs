@@ -16,6 +16,7 @@ public sealed class MineGameManager : MonoBehaviour
 
     private Coroutine levelTransitionCoroutine;
     private AudioSource audioSource;
+    private AudioSource audioSourceFx;
     private AudioListener audioListener;
     private int currentLevelIndex;
     private int score;
@@ -82,7 +83,9 @@ public sealed class MineGameManager : MonoBehaviour
         Instance = this;
 
         controls = new MineControls();
-        audioSource = FindAnyObjectByType<AudioSource>();
+        var audioSources = FindObjectsByType<AudioSource>();
+        audioSource = audioSources.Length > 0 ? audioSources[0] : null;
+        audioSourceFx = audioSources.Length > 1 ? audioSources[1] : null;
 
         tail = new MineTail();
         Sprite fallbackSprite = CreateSquareSprite();
@@ -213,9 +216,16 @@ public sealed class MineGameManager : MonoBehaviour
         exitDirection = Vector2Int.zero;
         State = GameState.Playing;
         message = "Collect all coal and destroy all breakable rocks. The exit will open afterwards.";
-        audioSource.clip = Resources.Load<AudioClip>("Audio/MinecrawlerNoVoice");
-        audioSource.loop = true;
-        audioSource.Play();
+        if (audioSource.clip == null)
+        {
+            audioSource.clip = Resources.Load<AudioClip>("Audio/MinecrawlerNoVoice");
+            audioSource.loop = true;
+            audioSource.Play();
+        }
+        else
+        {
+            audioSource.UnPause();
+        }
     }
 
     private void DisposeLevelStartInput()
@@ -260,6 +270,7 @@ public sealed class MineGameManager : MonoBehaviour
         if (State != GameState.Playing)
             return;
 
+        audioSource.Pause();
         State = GameState.Paused;
         Time.timeScale = 0f;
 
@@ -271,6 +282,7 @@ public sealed class MineGameManager : MonoBehaviour
         if (State != GameState.Paused)
             return;
 
+        audioSource.UnPause();
         Time.timeScale = 1f;
         State = GameState.Playing;
 
@@ -364,7 +376,7 @@ public sealed class MineGameManager : MonoBehaviour
         var obstacle = board.GetObstacle(targetPosition);
         if (obstacle != null)
         {
-            audioSource.PlayOneShot(Resources.Load<AudioClip>("Audio/destroy"), 0.25f);
+            audioSourceFx.PlayOneShot(Resources.Load<AudioClip>("Audio/destroy"), 0.25f);
             board.RemoveObstacle(obstacle);
             score += 25;
             moves++;
@@ -383,7 +395,7 @@ public sealed class MineGameManager : MonoBehaviour
 
         if (pickup != null)
         {
-            audioSource.PlayOneShot(Resources.Load<AudioClip>("Audio/pickup"));
+            audioSourceFx.PlayOneShot(Resources.Load<AudioClip>("Audio/pickup"));
             CollectCoal(pickup, newTailPosition);
         }
 
@@ -395,8 +407,8 @@ public sealed class MineGameManager : MonoBehaviour
         if (State != GameState.Playing)
             return;
 
-        audioSource.Stop();
-        audioSource.PlayOneShot(Resources.Load<AudioClip>("Audio/gameOver"));
+        audioSource.Pause();
+        audioSourceFx.PlayOneShot(Resources.Load<AudioClip>("Audio/gameOver"));
         State = GameState.GameOver;
         message = reason + "\n\nPress Restart.";
         DisposeLevelStartInput();
@@ -514,8 +526,8 @@ public sealed class MineGameManager : MonoBehaviour
         if (State != GameState.Playing)
             return;
 
-        audioSource.Stop();
-        audioSource.PlayOneShot(Resources.Load<AudioClip>("Audio/victory"));
+        audioSource.Pause();
+        audioSourceFx.PlayOneShot(Resources.Load<AudioClip>("Audio/victory"));
         State = GameState.LevelCompleted;
 
         message = $"Level {currentLevelIndex + 1} complete!";
