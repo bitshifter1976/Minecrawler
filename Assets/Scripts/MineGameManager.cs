@@ -7,7 +7,7 @@ using Debug = UnityEngine.Debug;
 
 public sealed class MineGameManager : MonoBehaviour
 {
-    public readonly string Version = "v1.3";
+    public readonly string Version = "v1.2";
 
     private IDisposable startInputSubscription;
     private const int LevelCount = 100;
