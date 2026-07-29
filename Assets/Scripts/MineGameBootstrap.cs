@@ -8,6 +8,7 @@ public sealed class MineGameBootstrap : MonoBehaviour
             return;
 
         GameObject gameObject = new("MineGame");
+        gameObject.AddComponent<PlayTimeTracker>();
         gameObject.AddComponent<MineGameManager>();
         gameObject.AddComponent<MineGameHud>();
     }

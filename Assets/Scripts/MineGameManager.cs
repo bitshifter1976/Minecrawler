@@ -1,8 +1,10 @@
 using System;
 using System.Collections;
+using System.Diagnostics;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Utilities;
+using Debug = UnityEngine.Debug;
 
 public sealed class MineGameManager : MonoBehaviour
 {
@@ -21,10 +23,12 @@ public sealed class MineGameManager : MonoBehaviour
     private int score;
     private int collected;
     private int moves;
-
+    private PlayTimeTracker playTimeTracker;
     private string message = "Collect all coal chunks.";
     private bool exitingLevel;
     private Vector2Int exitDirection;
+    private int lastScreenWidth;
+    private int lastScreenHeight;
 
     public static MineGameManager Instance
     {
@@ -61,6 +65,9 @@ public sealed class MineGameManager : MonoBehaviour
     public MineBoard Board => board;
 
     public int RemainingObstacles => board?.RemainingObstacles ?? 0;
+
+    public PlayTimeTracker PlayTimeTracker => playTimeTracker;
+
     public float AutomaticMoveInterval
     {
         get
@@ -69,6 +76,8 @@ public sealed class MineGameManager : MonoBehaviour
             return Mathf.Lerp(0.55f, 0.11f, progress);
         }
     }
+
+    public string Version => "v1.1";
 
     private void Awake()
     {
@@ -81,6 +90,9 @@ public sealed class MineGameManager : MonoBehaviour
 
         Instance = this;
 
+        playTimeTracker = GetComponent<PlayTimeTracker>();
+        if (playTimeTracker == null)
+            playTimeTracker = gameObject.AddComponent<PlayTimeTracker>();
         controls = new MineControls();
         var audioSources = FindObjectsByType<AudioSource>();
         audioSource = audioSources.Length > 0 ? audioSources[0] : null;
@@ -160,12 +172,14 @@ public sealed class MineGameManager : MonoBehaviour
     {
         controls.Gameplay.Restart.performed += OnRestart;
         controls.Gameplay.Enable();
+        playTimeTracker.SetPause(false);
     }
 
     private void OnDisable()
     {
         controls.Gameplay.Disable();
         controls.Gameplay.Restart.performed -= OnRestart;
+        playTimeTracker.SetPause(true);
     }
 
     private void OnDestroy()
@@ -232,7 +246,7 @@ public sealed class MineGameManager : MonoBehaviour
         exitingLevel = false;
         exitDirection = Vector2Int.zero;
         State = GameState.Playing;
-        message = "Collect all coal and destroy all breakable rocks. The exit will open afterwards.";
+        message = "Collect all coal and destroy all rocks. Then collect the key to open the exit.";
         if (audioSource.clip == null)
         {
             audioSource.clip = Resources.Load<AudioClip>("Audio/MinecrawlerNoVoice");
@@ -270,6 +284,7 @@ public sealed class MineGameManager : MonoBehaviour
         if (State != GameState.Playing)
             return;
 
+        playTimeTracker.SetPause(true);
         audioSource.Pause();
         State = GameState.Paused;
         Time.timeScale = 0f;
@@ -282,6 +297,7 @@ public sealed class MineGameManager : MonoBehaviour
         if (State != GameState.Paused)
             return;
 
+        playTimeTracker.SetPause(false);
         audioSource.UnPause();
         Time.timeScale = 1f;
         State = GameState.Playing;
@@ -327,7 +343,7 @@ public sealed class MineGameManager : MonoBehaviour
         }
 
         State = GameState.LevelReady;
-        message = "Collect all coal and destroy all breakable rocks. The exit will open afterwards.";
+        message = "Collect all coal and destroy all rocks. Then collect the key to open the exit.";
         ArmLevelStartInput();
     }
 
@@ -578,7 +594,7 @@ public sealed class MineGameManager : MonoBehaviour
     {
         DisposeLevelStartInput();
         State = GameState.Victory;
-        score = Math.Clamp(score-moves*3, 0, int.MaxValue);
+        score = Math.Clamp(score - moves * 3, 0, int.MaxValue);
         SaveCurrentLevel();
         message = "Congratulations! You completed this level. Final score: " + score;
     }
@@ -598,6 +614,17 @@ public sealed class MineGameManager : MonoBehaviour
         texture.Apply();
         texture.filterMode = FilterMode.Point;
         return Sprite.Create(texture, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
+    }
+
+    private void LateUpdate()
+    {
+        if (Screen.width == lastScreenWidth &&
+            Screen.height == lastScreenHeight)
+        {
+            return;
+        }
+
+        UpdateCamera();
     }
 
     private void SetupCamera()
@@ -624,13 +651,72 @@ public sealed class MineGameManager : MonoBehaviour
         Camera camera = Camera.main;
 
         if (camera == null || board.Width <= 0 || board.Height <= 0)
-        {
             return;
-        }
 
-        camera.transform.position = new Vector3((board.Width - 1) * 0.5f, (board.Height - 1) * 0.5f, -10f);
-        float horizontalSize = board.Width / (2f * camera.aspect);
-        float verticalSize = board.Height / 2f;
-        camera.orthographicSize = Mathf.Max(horizontalSize, verticalSize) + 0.8f;
+        lastScreenWidth = Screen.width;
+        lastScreenHeight = Screen.height;
+
+        camera.rect = new Rect(0f, 0f, 1f, 1f);
+
+        const float sidePaddingWorld = 0.35f;
+        const float bottomPaddingWorld = 0.35f;
+
+        float screenWidth = Mathf.Max(1f, Screen.width);
+        float screenHeight = Mathf.Max(1f, Screen.height);
+        float screenAspect = screenWidth / screenHeight;
+
+        float gameplayTopPixels =
+            MineGameHud.HudTop +
+            MineGameHud.HudHeight +
+            MineGameHud.HudLevelGap;
+
+        float gameplayHeightPixels =
+            Mathf.Max(1f, screenHeight - gameplayTopPixels);
+
+        // Anteil des Bildschirms, der tatsächlich für das Level verfügbar ist.
+        float gameplayHeightFraction =
+            gameplayHeightPixels / screenHeight;
+
+        float requiredWorldWidth =
+            board.Width + sidePaddingWorld * 2f;
+
+        float requiredWorldHeight =
+            board.Height + bottomPaddingWorld;
+
+        // Breite muss in die volle Bildschirmbreite passen.
+        float sizeForWidth =
+            requiredWorldWidth /
+            (2f * screenAspect);
+
+        // Höhe muss ausschließlich in den Bereich unterhalb des HUDs passen.
+        // Deshalb wird durch den verfügbaren Bildschirmanteil geteilt.
+        float sizeForHeight =
+            requiredWorldHeight /
+            (2f * gameplayHeightFraction);
+
+        camera.orthographicSize =
+            Mathf.Max(sizeForWidth, sizeForHeight);
+
+        float levelCenterX =
+            (board.Width - 1) * 0.5f;
+
+        float levelTopWorld =
+            board.Height - 0.5f;
+
+        float levelTopViewportY =
+            1f - gameplayTopPixels / screenHeight;
+
+        // Oberkante des Levels exakt unter dem HUD ausrichten.
+        float cameraY =
+            levelTopWorld -
+            (levelTopViewportY - 0.5f) *
+            2f *
+            camera.orthographicSize;
+
+        camera.transform.position = new Vector3(
+            levelCenterX,
+            cameraY,
+            -10f
+        );
     }
 }
