@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Diagnostics;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Utilities;
@@ -8,10 +7,11 @@ using Debug = UnityEngine.Debug;
 
 public sealed class MineGameManager : MonoBehaviour
 {
+    public readonly string Version = "v1.3";
+
     private IDisposable startInputSubscription;
     private const int LevelCount = 100;
     private const float LevelCompleteDelay = 1.5f;
-
     private MineControls controls;
     private MineBoard board;
 
@@ -76,8 +76,6 @@ public sealed class MineGameManager : MonoBehaviour
             return Mathf.Lerp(0.55f, 0.11f, progress);
         }
     }
-
-    public string Version => "v1.1";
 
     private void Awake()
     {
@@ -658,38 +656,44 @@ public sealed class MineGameManager : MonoBehaviour
 
         camera.rect = new Rect(0f, 0f, 1f, 1f);
 
-        const float sidePaddingWorld = 0.35f;
-        const float bottomPaddingWorld = 0.35f;
+        const float horizontalPaddingWorld = 0.35f;
+        const float verticalPaddingWorld = 0f;
 
         float screenWidth = Mathf.Max(1f, Screen.width);
         float screenHeight = Mathf.Max(1f, Screen.height);
         float screenAspect = screenWidth / screenHeight;
 
         float gameplayTopPixels =
-            MineGameHud.HudTop +
-            MineGameHud.HudHeight +
-            MineGameHud.HudLevelGap;
+            MineGameHud.TopMargin +
+            MineGameHud.HeaderHeight +
+            MineGameHud.LevelGap;
+
+        float gameplayBottomPixels =
+            MineGameHud.StatusHeight +
+            MineGameHud.BottomMargin +
+            MineGameHud.LevelGap;
 
         float gameplayHeightPixels =
-            Mathf.Max(1f, screenHeight - gameplayTopPixels);
+            Mathf.Max(
+                1f,
+                screenHeight -
+                gameplayTopPixels -
+                gameplayBottomPixels
+            );
 
-        // Anteil des Bildschirms, der tatsächlich für das Level verfügbar ist.
         float gameplayHeightFraction =
             gameplayHeightPixels / screenHeight;
 
         float requiredWorldWidth =
-            board.Width + sidePaddingWorld * 2f;
+            board.Width + horizontalPaddingWorld * 2f;
 
         float requiredWorldHeight =
-            board.Height + bottomPaddingWorld;
+            board.Height + verticalPaddingWorld * 2f;
 
-        // Breite muss in die volle Bildschirmbreite passen.
         float sizeForWidth =
             requiredWorldWidth /
             (2f * screenAspect);
 
-        // Höhe muss ausschließlich in den Bereich unterhalb des HUDs passen.
-        // Deshalb wird durch den verfügbaren Bildschirmanteil geteilt.
         float sizeForHeight =
             requiredWorldHeight /
             (2f * gameplayHeightFraction);
@@ -700,16 +704,19 @@ public sealed class MineGameManager : MonoBehaviour
         float levelCenterX =
             (board.Width - 1) * 0.5f;
 
-        float levelTopWorld =
-            board.Height - 0.5f;
+        float levelCenterY =
+            (board.Height - 1) * 0.5f;
 
-        float levelTopViewportY =
-            1f - gameplayTopPixels / screenHeight;
+        float gameplayCenterPixelsFromBottom =
+            gameplayBottomPixels +
+            gameplayHeightPixels * 0.5f;
 
-        // Oberkante des Levels exakt unter dem HUD ausrichten.
+        float gameplayCenterNormalized =
+            gameplayCenterPixelsFromBottom / screenHeight;
+
         float cameraY =
-            levelTopWorld -
-            (levelTopViewportY - 0.5f) *
+            levelCenterY -
+            (gameplayCenterNormalized - 0.5f) *
             2f *
             camera.orthographicSize;
 
