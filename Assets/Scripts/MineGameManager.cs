@@ -30,6 +30,10 @@ public sealed class MineGameManager : MonoBehaviour
     private int lastScreenWidth;
     private int lastScreenHeight;
 
+    private AmbientEffectSpawner ambientEffectSpawner;
+    private WaterDropSpawner waterDropSpawner;
+    private FireFlySpawner fireFlySpawner;
+
     public static MineGameManager Instance
     {
         get;
@@ -95,6 +99,10 @@ public sealed class MineGameManager : MonoBehaviour
         var audioSources = FindObjectsByType<AudioSource>();
         audioSource = audioSources.Length > 0 ? audioSources[0] : null;
         audioSourceFx = audioSources.Length > 1 ? audioSources[1] : null;
+
+        ambientEffectSpawner = gameObject.AddComponent<AmbientEffectSpawner>();
+        waterDropSpawner = gameObject.AddComponent<WaterDropSpawner>();
+        fireFlySpawner = gameObject.AddComponent<FireFlySpawner>();
 
         Sprite fallbackSprite = CreateSquareSprite();
         var wallSprite = Resources.Load<Sprite>("Art/Wall");
@@ -636,6 +644,7 @@ public sealed class MineGameManager : MonoBehaviour
             camera = cameraObject.AddComponent<Camera>();
             audioListener = cameraObject.AddComponent<AudioListener>();
             audioListener.enabled = true;
+            cameraObject.AddComponent<CameraShake>();
         }
 
         camera.orthographic = true;

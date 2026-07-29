@@ -3,13 +3,19 @@ using UnityEngine;
 
 public sealed class MineGameHud : MonoBehaviour
 {
+    // Diese Konstanten werden vom MineGameManager für das Kamera-Layout verwendet.
     public const float HeaderHeight = 100f;
     public const float StatusHeight = 80f;
     public const float TopMargin = 0f;
-    public const float BottomMargin = 10f;
+    public const float BottomMargin = 0f;
     public const float LevelGap = 0f;
 
-    private GUIStyle headerStyle;
+    private const float ReferenceWidth = 1920f;
+    private const float ReferenceHeight = 1080f;
+    private const float HorizontalMargin = 12f;
+    private const float BadgeGap = 5f;
+
+    private GUIStyle titleStyle;
     private GUIStyle valueStyle;
     private GUIStyle statusStyle;
     private GUIStyle overlayStyle;
@@ -19,249 +25,263 @@ public sealed class MineGameHud : MonoBehaviour
     private Texture2D badgeTexture;
     private Texture2D statusTexture;
 
+    private float scale = 1f;
+    private float lastStyleScale = -1f;
+
     private void OnGUI()
     {
         MineGameManager game = MineGameManager.Instance;
         if (game == null)
             return;
 
-        CreateStyles();
+        UpdateScale();
+        EnsureResources();
 
-        if (!TryGetLevelScreenBounds(game, out float left, out float right, out float top, out float bottom))
-            return;
+        HudLayout layout = HudLayout.Create(scale);
 
-        DrawHeader(game, left, right);
-        DrawStatus(game, left, right, bottom);
-        DrawStateOverlay(game, left, right, top, bottom);
+        DrawHeader(game, layout.HeaderRect);
+        DrawStatus(game, layout.StatusRect);
+        DrawStateOverlay(game, layout.BoardRect);
     }
 
-    private void CreateStyles()
+    private void UpdateScale()
+    {
+        float widthScale = Screen.width / ReferenceWidth;
+        float heightScale = Screen.height / ReferenceHeight;
+
+        scale = Mathf.Clamp(Mathf.Min(widthScale, heightScale), 0.55f, 1.6f);
+    }
+
+    private void EnsureResources()
     {
         if (panelTexture == null)
         {
-            panelTexture = CreateTexture(new Color(0.055f, 0.045f, 0.04f, 0.98f));
-            badgeTexture = CreateTexture(new Color(0.15f, 0.115f, 0.07f, 0.98f));
-            statusTexture = CreateTexture(new Color(0.10f, 0.08f, 0.055f, 0.98f));
+            panelTexture = CreateTexture(
+                new Color(0.055f, 0.045f, 0.04f, 0.98f),
+                "MineGameHud Panel");
+
+            badgeTexture = CreateTexture(
+                new Color(0.15f, 0.115f, 0.07f, 0.98f),
+                "MineGameHud Badge");
+
+            statusTexture = CreateTexture(
+                new Color(0.10f, 0.08f, 0.055f, 0.98f),
+                "MineGameHud Status");
         }
 
-        headerStyle ??= new GUIStyle(GUI.skin.label)
+        if (Mathf.Approximately(lastStyleScale, scale) &&
+            titleStyle != null &&
+            valueStyle != null &&
+            statusStyle != null &&
+            overlayStyle != null &&
+            overlayBoxStyle != null)
         {
-            fontSize = 28,
+            return;
+        }
+
+        lastStyleScale = scale;
+
+        titleStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = ScaleFont(28),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
-            normal = { textColor = new Color(0.88f, 0.67f, 0.24f) }
+            clipping = TextClipping.Clip
         };
+        titleStyle.normal.textColor = new Color(0.88f, 0.67f, 0.24f);
 
-        valueStyle ??= new GUIStyle(GUI.skin.label)
+        valueStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 34,
+            fontSize = ScaleFont(34),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
-            normal = { textColor = Color.white }
+            clipping = TextClipping.Clip
         };
+        valueStyle.normal.textColor = Color.white;
 
-        statusStyle ??= new GUIStyle(GUI.skin.label)
+        statusStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 44,
+            fontSize = ScaleFont(34),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             wordWrap = true,
-            normal = { textColor = new Color(0.94f, 0.94f, 0.90f) }
+            clipping = TextClipping.Clip
         };
+        statusStyle.normal.textColor = new Color(0.94f, 0.94f, 0.90f);
 
-        overlayStyle ??= new GUIStyle(GUI.skin.label)
+        overlayStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = Mathf.Clamp(Mathf.RoundToInt(Screen.height * 0.045f), 32, 68),
+            fontSize = ScaleFont(42),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             wordWrap = true,
-            normal = { textColor = Color.white }
+            clipping = TextClipping.Clip
         };
+        overlayStyle.normal.textColor = Color.white;
 
-        overlayBoxStyle ??= new GUIStyle(GUI.skin.box)
-        {
-            normal = { background = panelTexture }
-        };
+        overlayBoxStyle = new GUIStyle(GUI.skin.box);
+        overlayBoxStyle.normal.background = panelTexture;
     }
 
-    private void DrawHeader(MineGameManager game, float left, float right)
+    private int ScaleFont(int baseSize)
     {
-        float width = Mathf.Max(1f, right - left);
-        float y = TopMargin;
+        return Mathf.Max(10, Mathf.RoundToInt(baseSize * scale));
+    }
 
-        GUI.DrawTexture(
-            new Rect(left, y, width, HeaderHeight),
-            panelTexture
-        );
+    private void DrawHeader(MineGameManager game, Rect rect)
+    {
+        GUI.DrawTexture(rect, panelTexture, ScaleMode.StretchToFill);
 
-        const float gap = 5f;
+        const int badgeCount = 6;
+        float gap = BadgeGap * scale;
+        float badgeWidth = Mathf.Max(
+            1f,
+            (rect.width - gap * (badgeCount - 1)) / badgeCount);
 
-        float availableWidth =
-            width - gap * 5f;
+        string[] titles =
+        {
+            "LEVEL", "SCORE", "COAL", "ROCKS", "MOVES", "TIME"
+        };
 
-        float badgeWidth =
-            availableWidth / 6f;
-
-        float badgeHeight =
-            HeaderHeight;
-
-        float x = left;
-
-        DrawBadge(new Rect(x, y, badgeWidth, badgeHeight), "LEVEL", $"{game.CurrentLevel}/{game.TotalLevels}");
-        x += badgeWidth + gap;
-
-        DrawBadge(new Rect(x, y, badgeWidth, badgeHeight), "SCORE", game.Score.ToString("N0"));
-        x += badgeWidth + gap;
-
-        DrawBadge(new Rect(x, y, badgeWidth, badgeHeight), "COAL", game.RemainingCoal.ToString());
-        x += badgeWidth + gap;
-
-        DrawBadge(new Rect(x, y, badgeWidth, badgeHeight), "ROCKS", game.RemainingObstacles.ToString());
-        x += badgeWidth + gap;
-
-        DrawBadge(new Rect(x, y, badgeWidth, badgeHeight), "MOVES", game.Moves.ToString());
-        x += badgeWidth + gap;
-
-        DrawBadge(
-            new Rect(x, y, badgeWidth, badgeHeight),
-            "TIME",
+        string[] values =
+        {
+            $"{game.CurrentLevel}/{game.TotalLevels}",
+            game.Score.ToString("N0"),
+            game.RemainingCoal.ToString(),
+            game.RemainingObstacles.ToString(),
+            game.Moves.ToString(),
             FormatTime(game.PlayTimeTracker?.TimeElapsed ?? TimeSpan.Zero)
-        );
-    }
+        };
 
-    private void DrawStatus(MineGameManager game, float left, float right, float levelBottomGuiY)
-    {
-        float width = Mathf.Max(1f, right - left);
-        float y = levelBottomGuiY + LevelGap;
+        float x = rect.x;
 
-        GUI.DrawTexture(
-            new Rect(left, y, width, StatusHeight),
-            statusTexture
-        );
+        for (int i = 0; i < badgeCount; i++)
+        {
+            DrawBadge(
+                new Rect(x, rect.y, badgeWidth, rect.height),
+                titles[i],
+                values[i]);
 
-        GUI.Label(
-            new Rect(left + 10f, y + 2f, width - 20f, StatusHeight - 4f),
-            $"MineCrawler {game.Version}   -   {game.Message}",
-            statusStyle
-        );
+            x += badgeWidth + gap;
+        }
     }
 
     private void DrawBadge(Rect rect, string title, string value)
     {
-        GUI.DrawTexture(rect, badgeTexture);
+        GUI.DrawTexture(rect, badgeTexture, ScaleMode.StretchToFill);
 
         float titleHeight = rect.height * 0.42f;
 
         GUI.Label(
             new Rect(rect.x, rect.y, rect.width, titleHeight),
             title,
-            headerStyle
-        );
+            titleStyle);
 
         GUI.Label(
-            new Rect(rect.x, rect.y + titleHeight, rect.width, rect.height - titleHeight),
+            new Rect(
+                rect.x,
+                rect.y + titleHeight,
+                rect.width,
+                rect.height - titleHeight),
             value,
-            valueStyle
-        );
+            valueStyle);
     }
 
-    private void DrawStateOverlay(
-        MineGameManager game,
-        float left,
-        float right,
-        float levelTopGuiY,
-        float levelBottomGuiY)
+    private void DrawStatus(MineGameManager game, Rect rect)
     {
-        string overlayText = game.State switch
-        {
-            GameState.Loading => "Loading level...",
-            GameState.LevelReady =>
-                $"LEVEL {game.CurrentLevel}\n\n" +
-                "Press any key key to start!",
-            GameState.Paused => "PAUSED",
-            GameState.LevelCompleted =>
-                $"LEVEL {game.CurrentLevel} COMPLETE\n\n" +
-                $"Score: {game.Score:N0}",
-            GameState.GameOver =>
-                $"GAME OVER\n\n{game.Message}\n\n" +
-                $"Score: {game.Score:N0}",
-            GameState.Victory =>
-                $"CONGRATULATIONS!\n\n" +
-                $"You completed all {game.TotalLevels} levels! Final score: {game.Score:N0}",
-            _ => null
-        };
+        GUI.DrawTexture(rect, statusTexture, ScaleMode.StretchToFill);
 
-        if (string.IsNullOrEmpty(overlayText))
+        GUI.Label(
+            new Rect(
+                rect.x,
+                rect.y,
+                Mathf.Max(1f, rect.width),
+                Mathf.Max(1f, rect.height)),
+            $"MineCrawler {game.Version}   -   {game.Message}",
+            statusStyle);
+    }
+
+    private void DrawStateOverlay(MineGameManager game, Rect boardRect)
+    {
+        string text = GetOverlayText(game);
+        if (string.IsNullOrEmpty(text))
             return;
 
-        float levelWidth = right - left;
-        float maxWidth = Mathf.Min(820f, levelWidth - 30f);
-        float calculatedHeight =
-            overlayStyle.CalcHeight(new GUIContent(overlayText), maxWidth - 20f);
+        float margin = 20f * scale;
+        float padding = 16f * scale;
 
-        float levelHeight = levelBottomGuiY - levelTopGuiY;
-        float boxHeight = Mathf.Min(calculatedHeight + 30f, levelHeight - 20f);
+        float maximumWidth = Mathf.Min(
+            820f * scale,
+            Mathf.Max(1f, boardRect.width - margin * 2f));
 
-        Rect boxRect = new(
-            left + (levelWidth - maxWidth) * 0.5f,
-            levelTopGuiY + (levelHeight - boxHeight) * 0.5f,
-            maxWidth,
-            boxHeight
-        );
+        float textWidth = Mathf.Max(1f, maximumWidth - padding * 2f);
+        float contentHeight = overlayStyle.CalcHeight(new GUIContent(text), textWidth);
+
+        float boxHeight = Mathf.Min(
+            contentHeight + padding * 2f,
+            Mathf.Max(1f, boardRect.height - margin * 2f));
+
+        Rect boxRect = new Rect(
+            boardRect.x + (boardRect.width - maximumWidth) * 0.5f,
+            boardRect.y + (boardRect.height - boxHeight) * 0.5f,
+            maximumWidth,
+            boxHeight);
 
         GUI.Box(boxRect, GUIContent.none, overlayBoxStyle);
 
         GUI.Label(
-            new Rect(boxRect.x + 10f, boxRect.y + 10f, boxRect.width - 20f, boxRect.height - 20f),
-            overlayText,
-            overlayStyle
-        );
+            new Rect(
+                boxRect.x + padding,
+                boxRect.y + padding,
+                Mathf.Max(1f, boxRect.width - padding * 2f),
+                Mathf.Max(1f, boxRect.height - padding * 2f)),
+            text,
+            overlayStyle);
     }
 
-    private static bool TryGetLevelScreenBounds(
-        MineGameManager game,
-        out float left,
-        out float right,
-        out float top,
-        out float bottom)
+    private static string GetOverlayText(MineGameManager game)
     {
-        left = right = top = bottom = 0f;
-
-        Camera camera = Camera.main;
-
-        if (camera == null ||
-            game.Board == null ||
-            game.Board.Width <= 0 ||
-            game.Board.Height <= 0)
+        return game.State switch
         {
-            return false;
-        }
+            GameState.Loading =>
+                "Loading level...",
 
-        Vector3 leftBottom = camera.WorldToScreenPoint(
-            new Vector3(-0.5f, -0.5f, 0f)
-        );
+            GameState.LevelReady =>
+                $"LEVEL {game.CurrentLevel}\n\nPress any key to start!",
 
-        Vector3 rightTop = camera.WorldToScreenPoint(
-            new Vector3(game.Board.Width - 0.5f, game.Board.Height - 0.5f, 0f)
-        );
+            GameState.Paused =>
+                "PAUSED",
 
-        left = Mathf.Clamp(Mathf.Min(leftBottom.x, rightTop.x), 0f, Screen.width);
-        right = Mathf.Clamp(Mathf.Max(leftBottom.x, rightTop.x), 0f, Screen.width);
+            GameState.LevelCompleted =>
+                $"LEVEL {game.CurrentLevel} COMPLETE\n\nScore: {game.Score:N0}",
 
-        top = Screen.height - Mathf.Max(leftBottom.y, rightTop.y);
-        bottom = Screen.height - Mathf.Min(leftBottom.y, rightTop.y);
+            GameState.GameOver =>
+                $"GAME OVER\n\n{game.Message}\n\nScore: {game.Score:N0}",
 
-        return true;
+            GameState.Victory =>
+                "CONGRATULATIONS!\n\n" +
+                $"You completed all {game.TotalLevels} levels!\n\n" +
+                $"Final score: {game.Score:N0}",
+
+            _ => null
+        };
     }
 
-    private static string FormatTime(TimeSpan time) =>
-        time.TotalHours >= 1
+    private static string FormatTime(TimeSpan time)
+    {
+        return time.TotalHours >= 1
             ? $"{(int)time.TotalHours:00}:{time.Minutes:00}:{time.Seconds:00}"
             : $"{time.Minutes:00}:{time.Seconds:00}";
+    }
 
-    private static Texture2D CreateTexture(Color color)
+    private static Texture2D CreateTexture(Color color, string textureName)
     {
-        Texture2D texture = new(1, 1);
+        Texture2D texture = new Texture2D(1, 1)
+        {
+            name = textureName,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+
         texture.SetPixel(0, 0, color);
         texture.Apply();
         return texture;
@@ -269,8 +289,64 @@ public sealed class MineGameHud : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (panelTexture != null) Destroy(panelTexture);
-        if (badgeTexture != null) Destroy(badgeTexture);
-        if (statusTexture != null) Destroy(statusTexture);
+        DestroyTexture(panelTexture);
+        DestroyTexture(badgeTexture);
+        DestroyTexture(statusTexture);
+    }
+
+    private static void DestroyTexture(Texture2D texture)
+    {
+        if (texture == null)
+            return;
+
+        if (Application.isPlaying)
+            Destroy(texture);
+        else
+            DestroyImmediate(texture);
+    }
+
+    private readonly struct HudLayout
+    {
+        public Rect HeaderRect { get; }
+        public Rect BoardRect { get; }
+        public Rect StatusRect { get; }
+
+        private HudLayout(Rect headerRect, Rect boardRect, Rect statusRect)
+        {
+            HeaderRect = headerRect;
+            BoardRect = boardRect;
+            StatusRect = statusRect;
+        }
+
+        public static HudLayout Create(float uiScale)
+        {
+            float width = Mathf.Max(1f, Screen.width);
+
+            // Die Höhen bleiben identisch zu den Konstanten, weil der
+            // MineGameManager genau diesen Platz für die Kamera reserviert.
+            Rect header = new Rect(
+                0f,
+                TopMargin,
+                width,
+                HeaderHeight);
+
+            float boardTop = TopMargin + HeaderHeight + LevelGap;
+            float boardBottom =
+                Screen.height - StatusHeight - BottomMargin - LevelGap;
+
+            Rect board = new Rect(
+                0f,
+                boardTop,
+                width,
+                Mathf.Max(1f, boardBottom - boardTop));
+
+            Rect status = new Rect(
+                0f,
+                Screen.height - StatusHeight - BottomMargin,
+                width,
+                StatusHeight);
+
+            return new HudLayout(header, board, status);
+        }
     }
 }
