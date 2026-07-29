@@ -29,6 +29,8 @@ public class FallingRock : MonoBehaviour
     private float groundY;
     private bool impacted;
 
+    private CameraShake cameraShake;
+
     public void SetGroundHeight(float groundHeight)
     {
         groundY = groundHeight;
@@ -44,6 +46,8 @@ public class FallingRock : MonoBehaviour
 
         if (impactObject != null)
             impactObject.SetActive(false);
+
+        cameraShake = Camera.main.GetComponent<CameraShake>();
     }
 
     private void Update()
@@ -88,6 +92,11 @@ public class FallingRock : MonoBehaviour
             dustParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             dustParticles.Play();
             Destroy(dustParticles.gameObject, 3f);
+        }
+
+        if (cameraShake != null)
+        {
+            cameraShake.Shake(0.15f, 0.05f);
         }
 
         StartCoroutine(DestroyRoutine());

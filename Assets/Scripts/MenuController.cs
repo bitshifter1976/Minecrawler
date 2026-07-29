@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -24,12 +23,13 @@ public class MenuController : MonoBehaviour
     private GameObject lastSelectedObject;
     private AmbientEffectSpawner ambientEffectSpawner;
     private WaterDropSpawner waterDropSpawner;
-
+    private FireFlySpawner fireFlySpawner;
 
     private void Start()
     {
         ambientEffectSpawner = gameObject.AddComponent<AmbientEffectSpawner>();
         waterDropSpawner = gameObject.AddComponent<WaterDropSpawner>();
+        fireFlySpawner = gameObject.AddComponent<FireFlySpawner>();
 
         if (musicClip != null)
         {

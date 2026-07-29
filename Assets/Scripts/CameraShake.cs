@@ -1,36 +1,76 @@
-﻿using UnityEngine;
-using System.Collections;
+﻿using System.Collections;
+using UnityEngine;
 
 public class CameraShake : MonoBehaviour
 {
-    Vector3 originalPos;
+    [Header("Optional UI Background")]
+    [SerializeField] private RectTransform background;
 
-    void Awake()
+    private Vector3 originalCameraPosition;
+    private Vector2 originalBackgroundPosition;
+
+    private Coroutine shakeCoroutine;
+
+    private void Awake()
     {
-        originalPos = transform.localPosition;
+        originalCameraPosition = transform.localPosition;
+
+        if (background != null)
+            originalBackgroundPosition = background.anchoredPosition;
     }
 
     public void Shake(float duration, float strength)
     {
-        StopAllCoroutines();
-        StartCoroutine(ShakeRoutine(duration, strength));
+        if (shakeCoroutine != null)
+            StopCoroutine(shakeCoroutine);
+
+        shakeCoroutine = StartCoroutine(
+            ShakeRoutine(duration, strength));
     }
 
-    IEnumerator ShakeRoutine(float duration, float strength)
+    private IEnumerator ShakeRoutine(float duration, float strength)
     {
+        originalCameraPosition = transform.localPosition;
+
+        if (background != null)
+            originalBackgroundPosition = background.anchoredPosition;
+
         float timer = 0f;
 
         while (timer < duration)
         {
+            Vector2 offset =
+                Random.insideUnitCircle * strength;
+
             transform.localPosition =
-                originalPos +
-                (Vector3)Random.insideUnitCircle * strength;
+                originalCameraPosition +
+                new Vector3(offset.x, offset.y, 0f);
 
-            timer += Time.deltaTime;
+            if (background != null)
+            {
+                // UI verwendet Pixel, daher stärkere Skalierung notwendig
+                background.anchoredPosition =
+                    originalBackgroundPosition +
+                    offset * 100f;
+            }
 
+            timer += Time.unscaledDeltaTime;
             yield return null;
         }
 
-        transform.localPosition = originalPos;
+        transform.localPosition = originalCameraPosition;
+
+        if (background != null)
+            background.anchoredPosition = originalBackgroundPosition;
+
+        shakeCoroutine = null;
+    }
+
+    private void OnDisable()
+    {
+        transform.localPosition = originalCameraPosition;
+
+        if (background != null)
+            background.anchoredPosition = originalBackgroundPosition;
     }
 }
