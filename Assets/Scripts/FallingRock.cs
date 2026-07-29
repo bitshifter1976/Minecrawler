@@ -5,23 +5,23 @@ using UnityEngine;
 public class FallingRock : MonoBehaviour
 {
     [Header("Movement")]
-    public float gravity = 1f;
-    public float minStartSpeed = 0f;
-    public float maxStartSpeed = 0.25f;
-    public float minSpin = -220f;
-    public float maxSpin = 220f;
+    [SerializeField] private float gravity = 1f;
+    [SerializeField] private float minStartSpeed = 0f;
+    [SerializeField] private float maxStartSpeed = 0.25f;
+    [SerializeField] private float minSpin = -220f;
+    [SerializeField] private float maxSpin = 220f;
 
     [Header("Impact")]
-    public float destroyDelay = 0.6f;
+    [SerializeField] private float destroyDelay = 0.6f;
 
     [Header("References")]
-    public SpriteRenderer rockRenderer;
-    public GameObject impactObject;
-    private SpriteAnimation impactAnimation;
+    [SerializeField] private SpriteRenderer rockRenderer;
+    [SerializeField] private GameObject impactObject;
+    [SerializeField] private SpriteAnimation impactAnimation;
 
     [Header("Audio")]
-    public AudioSource audioSource;
-    public AudioClip impactClip;
+    [SerializeField] private AudioSource audioSource;
+    [SerializeField] private AudioClip impactClip;
 
     private float velocity;
     private float spinSpeed;
@@ -38,12 +38,8 @@ public class FallingRock : MonoBehaviour
         velocity = Random.Range(minStartSpeed, maxStartSpeed);
         spinSpeed = Random.Range(minSpin, maxSpin);
 
-        impactAnimation = GetComponent<SpriteAnimation>();
-
-        float scale = Random.Range(0.8f, 1.3f);
+        float scale = Random.Range(0.3f, 1f);
         transform.localScale = Vector3.one * scale;
-
-        groundY += Random.Range(-5f, 1f);
 
         if (impactObject != null)
             impactObject.SetActive(false);
@@ -83,7 +79,7 @@ public class FallingRock : MonoBehaviour
             impactAnimation.Play();
 
         if (audioSource != null && impactClip != null)
-            audioSource.PlayOneShot(impactClip);
+            audioSource.PlayOneShot(impactClip, Random.Range(0.1f, 0.25f));
 
         StartCoroutine(DestroyRoutine());
     }
