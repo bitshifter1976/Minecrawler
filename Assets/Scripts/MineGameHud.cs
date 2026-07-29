@@ -62,7 +62,7 @@ public sealed class MineGameHud : MonoBehaviour
 
         statusStyle ??= new GUIStyle(GUI.skin.label)
         {
-            fontSize = 50,
+            fontSize = 44,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             wordWrap = true,
