@@ -18,6 +18,7 @@ public class FallingRock : MonoBehaviour
     [SerializeField] private SpriteRenderer rockRenderer;
     [SerializeField] private GameObject impactObject;
     [SerializeField] private SpriteAnimation impactAnimation;
+    [SerializeField] private ParticleSystem dustParticles;
 
     [Header("Audio")]
     [SerializeField] private AudioSource audioSource;
@@ -80,6 +81,14 @@ public class FallingRock : MonoBehaviour
 
         if (audioSource != null && impactClip != null)
             audioSource.PlayOneShot(impactClip, Random.Range(0.1f, 0.25f));
+
+        if (dustParticles != null)
+        {
+            dustParticles.transform.parent = null;
+            dustParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            dustParticles.Play();
+            Destroy(dustParticles.gameObject, 3f);
+        }
 
         StartCoroutine(DestroyRoutine());
     }

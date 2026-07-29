@@ -23,11 +23,13 @@ public class MenuController : MonoBehaviour
 
     private GameObject lastSelectedObject;
     private AmbientEffectSpawner ambientEffectSpawner;
+    private WaterDropSpawner waterDropSpawner;
 
 
     private void Start()
     {
         ambientEffectSpawner = gameObject.AddComponent<AmbientEffectSpawner>();
+        waterDropSpawner = gameObject.AddComponent<WaterDropSpawner>();
 
         if (musicClip != null)
         {

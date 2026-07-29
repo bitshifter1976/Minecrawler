@@ -29,19 +29,11 @@ public class AmbientEffectSpawner : MonoBehaviour
 
     void SpawnRock()
     {
-        float left =
-            cam.ViewportToWorldPoint(new Vector3(0, 1, 0)).x;
-
-        float right =
-            cam.ViewportToWorldPoint(new Vector3(1, 1, 0)).x;
-
-        float top =
-            cam.ViewportToWorldPoint(new Vector3(0, 1, 0)).y;
-
-        float bottom =
-            cam.ViewportToWorldPoint(new Vector3(0, 0, 0)).y;
-
-        float x = Random.Range(left, right - 3f);
+        float left = cam.ViewportToWorldPoint(new Vector3(0.02f, 1f, 0)).x;
+        float right = cam.ViewportToWorldPoint(new Vector3(0.6f, 1f, 0)).x;
+        float top = cam.ViewportToWorldPoint(new Vector3(0, 1, 0)).y;
+        float bottom = cam.ViewportToWorldPoint(new Vector3(0, 0, 0)).y;
+        float x = Random.Range(left, right);
 
         if (RockPrefab == null)
             RockPrefab = Resources.Load<FallingRock>("Prefabs/FallingRock");
