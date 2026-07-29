@@ -15,9 +15,12 @@ public class MenuController : MonoBehaviour
     public AudioClip musicClip;
 
     private GameObject lastSelectedObject;
+    public AmbientEffectSpawner ambientEffectSpawner;
 
     private void Start()
     {
+        ambientEffectSpawner = gameObject.AddComponent<AmbientEffectSpawner>();
+        //ambientEffectSpawner.gameObject.AddComponent<FallingRock>();
         if (musicClip != null)
         {
             audioSource.clip = musicClip;
