@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 public sealed class MineGameHud : MonoBehaviour
@@ -34,6 +34,8 @@ public sealed class MineGameHud : MonoBehaviour
         if (game == null)
             return;
 
+        GUI.skin.font = Resources.Load<Font>("Fonts/RUBIK-LIGHT SDF");
+
         UpdateScale();
         EnsureResources();
 
@@ -41,6 +43,7 @@ public sealed class MineGameHud : MonoBehaviour
 
         DrawHeader(game, layout.HeaderRect);
         DrawStatus(game, layout.StatusRect);
+        DrawBossHealth(game, layout.BoardRect);
         DrawStateOverlay(game, layout.BoardRect);
     }
 
@@ -199,6 +202,47 @@ public sealed class MineGameHud : MonoBehaviour
                 Mathf.Max(1f, rect.height)),
             $"MineCrawler {game.Version}   -   {game.Message}",
             statusStyle);
+    }
+
+
+    private void DrawBossHealth(MineGameManager game, Rect boardRect)
+    {
+        if (game.RemainingBosses <= 0 ||
+            game.BossMaximumHitPoints <= 0)
+        {
+            return;
+        }
+
+        float width = Mathf.Min(boardRect.width * 0.55f, 760f * scale);
+        float height = 34f * scale;
+        float x = boardRect.x + (boardRect.width - width) * 0.5f;
+        float y = boardRect.y + 10f * scale;
+
+        Rect backgroundRect = new(x, y, width, height);
+        GUI.DrawTexture(
+            backgroundRect,
+            panelTexture,
+            ScaleMode.StretchToFill);
+
+        float ratio = Mathf.Clamp01(
+            (float)game.BossHitPoints /
+            game.BossMaximumHitPoints);
+
+        Rect fillRect = new(
+            backgroundRect.x + 4f * scale,
+            backgroundRect.y + 4f * scale,
+            (backgroundRect.width - 8f * scale) * ratio,
+            backgroundRect.height - 8f * scale);
+
+        GUI.DrawTexture(
+            fillRect,
+            badgeTexture,
+            ScaleMode.StretchToFill);
+
+        GUI.Label(
+            backgroundRect,
+            $"{game.BossName}  {game.BossHitPoints}/{game.BossMaximumHitPoints}",
+            titleStyle);
     }
 
     private void DrawStateOverlay(MineGameManager game, Rect boardRect)

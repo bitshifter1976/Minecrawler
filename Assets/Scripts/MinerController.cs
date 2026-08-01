@@ -3,14 +3,14 @@ using UnityEngine.InputSystem;
 
 public sealed class MinerController : GridActor
 {
-    private MineControlsGenerated controls;
+    private MineControls controls;
 
     private Vector2Int moveDirection = Vector2Int.right;
     private float moveTimer;
 
     private void Awake()
     {
-        controls = new MineControlsGenerated();
+        controls = new MineControls();
         moveDirection = Vector2Int.right;
         UpdateRotation();
     }

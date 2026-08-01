@@ -1,4 +1,6 @@
+using System;
 using UnityEngine;
+using UnityEngine.Audio;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -7,8 +9,10 @@ public class MenuController : MonoBehaviour
 {
     public Button buttonNew;
     public Button buttonContinue;
+    public Button buttonOptions;
     public Button buttonEnd;
 
+    public AudioMixer audioMixer;
     public AudioSource audioSource;
     public AudioSource audioSourceAmbience;
     public AudioSource audioSourceWind;
@@ -21,15 +25,20 @@ public class MenuController : MonoBehaviour
     public Button[] buttons;
 
     private GameObject lastSelectedObject;
-    private AmbientEffectSpawner ambientEffectSpawner;
-    private WaterDropSpawner waterDropSpawner;
-    private FireFlySpawner fireFlySpawner;
+    private GameSettings settings;
 
     private void Start()
     {
-        ambientEffectSpawner = gameObject.AddComponent<AmbientEffectSpawner>();
-        waterDropSpawner = gameObject.AddComponent<WaterDropSpawner>();
-        fireFlySpawner = gameObject.AddComponent<FireFlySpawner>();
+        settings = GameSettings.Load();
+        settings.UseSettings(audioMixer);
+        settings.LastSceneIndex = 0;
+
+        gameObject.AddComponent<FallingRockSpawner>();
+        gameObject.AddComponent<WaterDropSpawner>();
+        gameObject.AddComponent<FireFlySpawner>();
+
+        audioMixer.SetFloat("MusicVolume", Mathf.Log10(settings.MusicVolume) * 20);
+        audioMixer.SetFloat("SfxVolume", Mathf.Log10(settings.SfxVolume) * 20);
 
         if (musicClip != null)
         {
@@ -57,6 +66,7 @@ public class MenuController : MonoBehaviour
 
         buttonNew.onClick.AddListener(OnNewGameClicked);
         buttonContinue.onClick.AddListener(OnContinueGameClicked);
+        buttonOptions.onClick.AddListener(OnOptionsClicked);   
         buttonEnd.onClick.AddListener(OnEndGameClicked);        
 
         EventSystem.current.SetSelectedGameObject(null);
@@ -69,6 +79,7 @@ public class MenuController : MonoBehaviour
             AddHoverSelection(button);
         }
     }
+
     private void AddHoverSelection(Button button)
     {
         EventTrigger trigger = button.GetComponent<EventTrigger>();
@@ -116,6 +127,17 @@ public class MenuController : MonoBehaviour
         SceneManager.LoadScene("Game");
     }
 
+    private void OnOptionsClicked()
+    {
+        if (startClip != null)
+            audioSource.PlayOneShot(startClip);
+
+        GameSettings settings = GameSettings.Load();
+        settings.LastSceneIndex = 0;
+
+        SceneManager.LoadScene("Options");
+    }
+
     private void OnEndGameClicked()
     {
         if (startClip != null)
@@ -128,6 +150,7 @@ public class MenuController : MonoBehaviour
     {
         buttonNew.onClick.RemoveListener(OnNewGameClicked);
         buttonContinue.onClick.RemoveListener(OnContinueGameClicked);
+        buttonOptions.onClick.RemoveListener(OnOptionsClicked);
         buttonEnd.onClick.RemoveListener(OnEndGameClicked);
     }
 }

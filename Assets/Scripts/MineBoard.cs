@@ -1,9 +1,5 @@
-﻿using System.Collections.Generic;
-using System.Drawing;
-using UnityEditor;
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Audio;
-using UnityEngine.UIElements;
 using Color = UnityEngine.Color;
 
 public sealed class MineBoard
@@ -17,6 +13,7 @@ public sealed class MineBoard
     private readonly HashSet<Vector2Int> walls = new();
     private readonly Dictionary<Vector2Int, CoalPickup> coal = new();
     private readonly Dictionary<Vector2Int, BreakableObstacle> obstacles = new();
+    private readonly Dictionary<Vector2Int, LevelBoss> bosses = new();
     private GameObject exitDoorObject;
     private Sprite floorSprite;
     private Sprite doorClosedSprite;
@@ -24,6 +21,9 @@ public sealed class MineBoard
     private Sprite cartSprite;
     private Sprite minerSprite;
     private Sprite keySprite;
+    private Sprite bossSprite;
+    private Sprite bossProjectileSprite;
+    private int levelNumber;
     private KeyPickup spawnedKey;
 
     public MinerController Miner { get; private set; }
@@ -34,11 +34,25 @@ public sealed class MineBoard
     public int Height { get; private set; }
     public int RemainingCoal => coal.Count;
     public int RemainingObstacles => obstacles.Count;
-    public bool IsLevelCleared => RemainingCoal == 0 && RemainingObstacles == 0;
+    public int RemainingBosses => bosses.Count;
+    public LevelBoss ActiveBoss
+    {
+        get
+        {
+            foreach (LevelBoss boss in bosses.Values)
+                return boss;
+
+            return null;
+        }
+    }
+    public bool IsLevelCleared =>
+        RemainingCoal == 0 &&
+        RemainingObstacles == 0 &&
+        RemainingBosses == 0;
     public MineTail Tail => tail;
     public KeyPickup SpawnedKey => spawnedKey;
 
-    public MineBoard(Transform parent, Sprite squareSprite, Sprite wallSprite, Sprite rockSprite, Sprite coalSprite, Sprite floorSprite, Sprite doorClosedSprite, Sprite doorOpenSprite, Sprite cartSprite, Sprite minerSprite, Sprite keySprite)
+    public MineBoard(Transform parent, Sprite squareSprite, Sprite wallSprite, Sprite rockSprite, Sprite coalSprite, Sprite floorSprite, Sprite doorClosedSprite, Sprite doorOpenSprite, Sprite cartSprite, Sprite minerSprite, Sprite keySprite, Sprite bossSprite, Sprite bossProjectileSprite)
     {
         this.parent = parent;
         this.squareSprite = squareSprite;
@@ -51,16 +65,19 @@ public sealed class MineBoard
         this.cartSprite = cartSprite;
         this.minerSprite = minerSprite;
         this.keySprite = keySprite;
+        this.bossSprite = bossSprite;
+        this.bossProjectileSprite = bossProjectileSprite;
         tail = new MineTail();
     }
 
-    public bool Build(MineLevelData level)
+    public bool Build(MineLevelData level, int currentLevelNumber)
     {
         if (level == null)
             return false;
 
         Clear();
 
+        levelNumber = currentLevelNumber;
         Width = level.Width;
         Height = level.Height;
 
@@ -101,6 +118,10 @@ public sealed class MineBoard
 
                     case 'B':
                         CreateObstacle(position, 0.75f, 1);
+                        break;
+
+                    case 'X':
+                        CreateBoss(position);
                         break;
 
                     case 'P':
@@ -186,6 +207,7 @@ public sealed class MineBoard
         walls.Clear();
         coal.Clear();
         obstacles.Clear();
+        bosses.Clear();
 
         Miner = null;
 
@@ -235,6 +257,85 @@ public sealed class MineBoard
         );
 
         return obstacle;
+    }
+
+
+    public LevelBoss GetBoss(Vector2Int position)
+    {
+        bosses.TryGetValue(
+            position,
+            out LevelBoss boss);
+
+        return boss;
+    }
+
+
+    public bool CanBossMoveTo(
+        LevelBoss boss,
+        Vector2Int position)
+    {
+        if (boss == null)
+            return false;
+
+        if (!IsInside(position))
+            return false;
+
+        if (IsWall(position) ||
+            IsExit(position))
+        {
+            return false;
+        }
+
+        if (GetObstacle(position) != null ||
+            GetCoal(position) != null ||
+            GetBoss(position) != null)
+        {
+            return false;
+        }
+
+        if (spawnedKey != null &&
+            spawnedKey.GridPosition == position)
+        {
+            return false;
+        }
+
+        if (tail.Contains(position))
+            return false;
+
+        // Das Spielerfeld ist erlaubt, damit der Boss den Miner treffen kann.
+        return true;
+    }
+
+    public bool TryReserveBossMove(
+        LevelBoss boss,
+        Vector2Int targetPosition)
+    {
+        if (!CanBossMoveTo(
+                boss,
+                targetPosition))
+        {
+            return false;
+        }
+
+        Vector2Int oldPosition =
+            boss.GridPosition;
+
+        bosses.Remove(oldPosition);
+        bosses[targetPosition] = boss;
+
+        boss.ReserveGridPosition(
+            targetPosition);
+
+        return true;
+    }
+
+    public void RemoveBoss(LevelBoss boss)
+    {
+        if (boss == null)
+            return;
+
+        bosses.Remove(boss.GridPosition);
+        Object.Destroy(boss.gameObject);
     }
 
     public void RemoveObstacle(
@@ -327,6 +428,25 @@ public sealed class MineBoard
             );
 
         obstacles[position] = obstacle;
+    }
+
+
+    private void CreateBoss(Vector2Int position)
+    {
+        LevelBoss boss =
+            CreateActor<LevelBoss>(
+                "Level Boss",
+                position,
+                Color.white,
+                4,
+                1f,
+                bossSprite);
+
+        bosses[position] = boss;
+        boss.Initialize(
+            levelNumber,
+            Miner,
+            bossProjectileSprite);
     }
 
     private void CreateMiner(Vector2Int position)
@@ -511,6 +631,9 @@ public sealed class MineBoard
             return false;
 
         if (GetCoal(position) != null)
+            return false;
+
+        if (GetBoss(position) != null)
             return false;
 
         if (tail.Contains(position))

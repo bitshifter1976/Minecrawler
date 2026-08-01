@@ -9,6 +9,12 @@ public class PlayTimeTracker : MonoBehaviour
     public bool IsPaused => isPaused;
     public TimeSpan TimeElapsed => TimeSpan.FromSeconds(totalPlayTime);
 
+    public float TotalPlayTime
+    {
+        get { return totalPlayTime; }
+        set { totalPlayTime = value; }
+    }
+
     private void Update()
     {
         // Only track time if the game state is active

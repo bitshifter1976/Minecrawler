@@ -7,6 +7,9 @@ public sealed class MineGameBootstrap : MonoBehaviour
         if (FindAnyObjectByType<MineGameManager>() != null)
             return;
 
+        var settings = GameSettings.Load();
+        settings.LastSceneIndex = 1;
+        settings.Save();
         GameObject gameObject = new("MineGame");
         gameObject.AddComponent<PlayTimeTracker>();
         gameObject.AddComponent<MineGameManager>();

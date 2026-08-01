@@ -1,8 +1,10 @@
 using System;
 using System.Collections;
 using UnityEngine;
+using UnityEngine.Audio;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Utilities;
+using UnityEngine.SceneManagement;
 using Debug = UnityEngine.Debug;
 
 public sealed class MineGameManager : MonoBehaviour
@@ -11,7 +13,7 @@ public sealed class MineGameManager : MonoBehaviour
 
     private IDisposable startInputSubscription;
     private const int LevelCount = 100;
-    private const float LevelCompleteDelay = 1.5f;
+    private const float LevelCompleteDelay = 2.5f;
     private MineControls controls;
     private MineBoard board;
 
@@ -30,9 +32,7 @@ public sealed class MineGameManager : MonoBehaviour
     private int lastScreenWidth;
     private int lastScreenHeight;
 
-    private AmbientEffectSpawner ambientEffectSpawner;
-    private WaterDropSpawner waterDropSpawner;
-    private FireFlySpawner fireFlySpawner;
+    private GameSettings settings;
 
     public static MineGameManager Instance
     {
@@ -70,14 +70,47 @@ public sealed class MineGameManager : MonoBehaviour
 
     public int RemainingObstacles => board?.RemainingObstacles ?? 0;
 
+    public int RemainingBosses => board?.RemainingBosses ?? 0;
+
+    public int BossHitPoints => board?.ActiveBoss?.HitPoints ?? 0;
+
+    public int BossMaximumHitPoints => board?.ActiveBoss?.MaximumHitPoints ?? 0;
+
+    public string BossName => board?.ActiveBoss?.BossName ?? string.Empty;
+
     public PlayTimeTracker PlayTimeTracker => playTimeTracker;
 
     public float AutomaticMoveInterval
     {
         get
         {
-            float progress = currentLevelIndex / 99f;
-            return Mathf.Lerp(0.55f, 0.11f, progress);
+            float progress =
+                currentLevelIndex / 99f;
+
+            float normalInterval =
+                Mathf.Lerp(
+                    0.55f,
+                    0.11f,
+                    progress);
+
+            GameDifficulty difficulty =
+                settings != null
+                    ? settings.GameDifficulty
+                    : GameSettings.Load().GameDifficulty;
+
+            // Das Bewegungsintervall ist umgekehrt zur Geschwindigkeit:
+            // größeres Intervall = langsamer, kleineres Intervall = schneller.
+            return difficulty switch
+            {
+                GameDifficulty.Easy =>
+                    normalInterval / 0.80f,
+
+                GameDifficulty.Hardcore =>
+                    normalInterval / 1.35f,
+
+                _ =>
+                    normalInterval
+            };
         }
     }
 
@@ -91,18 +124,22 @@ public sealed class MineGameManager : MonoBehaviour
         }
 
         Instance = this;
+        settings = GameSettings.Load();
+        settings.LastSceneIndex = 1;
 
         playTimeTracker = GetComponent<PlayTimeTracker>();
         if (playTimeTracker == null)
             playTimeTracker = gameObject.AddComponent<PlayTimeTracker>();
+        playTimeTracker.TotalPlayTime = settings.Playtime;
+
         controls = new MineControls();
         var audioSources = FindObjectsByType<AudioSource>();
         audioSource = audioSources.Length > 0 ? audioSources[0] : null;
         audioSourceFx = audioSources.Length > 1 ? audioSources[1] : null;
 
-        ambientEffectSpawner = gameObject.AddComponent<AmbientEffectSpawner>();
-        waterDropSpawner = gameObject.AddComponent<WaterDropSpawner>();
-        fireFlySpawner = gameObject.AddComponent<FireFlySpawner>();
+        gameObject.AddComponent<FallingRockSpawner>();
+        gameObject.AddComponent<WaterDropSpawner>();
+        gameObject.AddComponent<FireFlySpawner>();
 
         Sprite fallbackSprite = CreateSquareSprite();
         var wallSprite = Resources.Load<Sprite>("Art/Wall");
@@ -160,15 +197,43 @@ public sealed class MineGameManager : MonoBehaviour
             keySprite = fallbackSprite;
         }
 
-        board = new MineBoard(transform, fallbackSprite, wallSprite, rockSprite, coalSprite, floorSprite, doorClosedSprite, doorOpenSprite, cartSprite, minerSprite, keySprite);
+        Sprite bossSprite =
+            BossVisuals.LoadBoss(1);
 
-        currentLevelIndex = 0;
-        if (PlayerPrefs.GetInt("ContinueGame") == 1 && PlayerPrefs.HasKey("CurrentLevel"))
+        if (bossSprite == null)
         {
-            currentLevelIndex = PlayerPrefs.GetInt("CurrentLevel", 0);
-            score = PlayerPrefs.GetInt("Score", 0);
+            Debug.LogWarning(
+                "No imported boss sprite found. Using the fallback square sprite.");
+
+            bossSprite = fallbackSprite;
         }
+
+        Sprite bossProjectileSprite =
+            BossVisuals.LoadProjectile(false);
+
+        board = new MineBoard(
+            transform,
+            fallbackSprite,
+            wallSprite,
+            rockSprite,
+            coalSprite,
+            floorSprite,
+            doorClosedSprite,
+            doorOpenSprite,
+            cartSprite,
+            minerSprite,
+            keySprite,
+            bossSprite,
+            bossProjectileSprite);
+
+        if (PlayerPrefs.GetInt("ContinueGame") == 1)
+        {
+            score = settings.Score;
+            playTimeTracker.TotalPlayTime = settings.Playtime;
+        }
+        currentLevelIndex = settings.CurrentLevel - 1;
         currentLevelIndex = Mathf.Clamp(currentLevelIndex, 0, LevelCount - 1);
+        currentLevelIndex = 0;
 
         LoadLevel(currentLevelIndex);
         SetupCamera();
@@ -177,6 +242,7 @@ public sealed class MineGameManager : MonoBehaviour
     private void OnEnable()
     {
         controls.Gameplay.Restart.performed += OnRestart;
+        controls.Gameplay.Options.performed += (callback) => SceneManager.LoadScene(2);
         controls.Gameplay.Enable();
         playTimeTracker.SetPause(false);
     }
@@ -185,6 +251,7 @@ public sealed class MineGameManager : MonoBehaviour
     {
         controls.Gameplay.Disable();
         controls.Gameplay.Restart.performed -= OnRestart;
+        controls.Gameplay.Options.performed -= (callback) => SceneManager.LoadScene(2);
         playTimeTracker.SetPause(true);
     }
 
@@ -216,8 +283,8 @@ public sealed class MineGameManager : MonoBehaviour
                 break;
 
             default:
-                score = PlayerPrefs.GetInt("Score", 0);
-                currentLevelIndex = PlayerPrefs.GetInt("CurrentLevel", 0);
+                score = settings.Score;
+                currentLevelIndex = settings.CurrentLevel - 1;
                 LoadLevel(currentLevelIndex);
                 break;
         }
@@ -342,7 +409,7 @@ public sealed class MineGameManager : MonoBehaviour
             return;
         }
 
-        if (!board.Build(level))
+        if (!board.Build(level, currentLevelIndex + 1))
         {
             TriggerGameOver($"Level {currentLevelIndex + 1} is invalid.");
             return;
@@ -395,6 +462,55 @@ public sealed class MineGameManager : MonoBehaviour
         {
             TriggerGameOver("You crashed into your own tail!");
             return false;
+        }
+
+
+        LevelBoss boss = board.GetBoss(targetPosition);
+        if (boss != null)
+        {
+            moves++;
+
+            bool destroyed = boss.Hit();
+
+            if (audioSourceFx != null)
+            {
+                AudioClip hitClip =
+                    Resources.Load<AudioClip>("Audio/bossHit");
+
+                if (hitClip != null)
+                    audioSourceFx.PlayOneShot(hitClip, 0.8f);
+            }
+
+            if (destroyed)
+            {
+                int bossTier = Mathf.Max(1, CurrentLevel / 10);
+                score += 1000 * bossTier;
+
+                if (audioSourceFx != null)
+                {
+                    AudioClip destroyedClip =
+                        Resources.Load<AudioClip>("Audio/bossDestroyed");
+
+                    if (destroyedClip != null)
+                        audioSourceFx.PlayOneShot(destroyedClip);
+                }
+
+                Camera.main?
+                    .GetComponent<CameraShake>()?
+                    .Shake(0.45f, 0.16f);
+
+                boss.PlayDestroyedEffect();
+                board.RemoveBoss(boss);
+                message = "Boss destroyed!";
+                CheckLevelCleared();
+            }
+            else
+            {
+                message =
+                    $"Boss hit! {boss.HitPoints}/{boss.MaximumHitPoints} HP remaining.";
+            }
+
+            return true;
         }
 
         var obstacle = board.GetObstacle(targetPosition);
@@ -536,12 +652,6 @@ public sealed class MineGameManager : MonoBehaviour
         CheckLevelCleared();
     }
 
-    private void OpenExit()
-    {
-        board.OpenExit();
-        message = "All coal collected - the exit is now open!";
-    }
-
     private void CheckLevelCleared()
     {
         if (board.IsLevelCleared)
@@ -551,7 +661,31 @@ public sealed class MineGameManager : MonoBehaviour
             return;
         }
 
-        message = $"{board.RemainingCoal} coal and {board.RemainingObstacles} rocks remaining.";
+        message = GetRemainingObjectivesMessage();
+    }
+
+
+    private string GetRemainingObjectivesMessage()
+    {
+        if (board == null)
+            return string.Empty;
+
+        if (board.RemainingBosses > 0)
+        {
+            return
+                $"{board.RemainingCoal} coal, " +
+                $"{board.RemainingObstacles} rocks and " +
+                $"{board.RemainingBosses} boss remaining.";
+        }
+
+        return
+            $"{board.RemainingCoal} coal and " +
+            $"{board.RemainingObstacles} rocks remaining.";
+    }
+
+    public void BossProjectileHit()
+    {
+        TriggerGameOver("You were hit by the boss!");
     }
 
     private void CompleteLevel()
