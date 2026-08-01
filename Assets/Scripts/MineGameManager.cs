@@ -84,33 +84,8 @@ public sealed class MineGameManager : MonoBehaviour
     {
         get
         {
-            float progress =
-                currentLevelIndex / 99f;
-
-            float normalInterval =
-                Mathf.Lerp(
-                    0.55f,
-                    0.11f,
-                    progress);
-
-            GameDifficulty difficulty =
-                settings != null
-                    ? settings.GameDifficulty
-                    : GameSettings.Load().GameDifficulty;
-
-            // Das Bewegungsintervall ist umgekehrt zur Geschwindigkeit:
-            // größeres Intervall = langsamer, kleineres Intervall = schneller.
-            return difficulty switch
-            {
-                GameDifficulty.Easy =>
-                    normalInterval / 0.80f,
-
-                GameDifficulty.Hardcore =>
-                    normalInterval / 1.35f,
-
-                _ =>
-                    normalInterval
-            };
+            float progress = currentLevelIndex / 99f;
+            return Mathf.Lerp(0.55f, 0.11f, progress);
         }
     }
 
@@ -197,19 +172,15 @@ public sealed class MineGameManager : MonoBehaviour
             keySprite = fallbackSprite;
         }
 
-        Sprite bossSprite =
-            BossVisuals.LoadBoss(1);
-
+        var bossSprite = Resources.Load<Sprite>("Art/Boss");
         if (bossSprite == null)
         {
-            Debug.LogWarning(
-                "No imported boss sprite found. Using the fallback square sprite.");
-
+            Debug.LogWarning("No boss sprite assigned. Using the fallback square sprite.");
             bossSprite = fallbackSprite;
         }
 
-        Sprite bossProjectileSprite =
-            BossVisuals.LoadProjectile(false);
+        var bossProjectileSprite =
+            Resources.Load<Sprite>("Art/BossProjectile");
 
         board = new MineBoard(
             transform,
@@ -230,10 +201,10 @@ public sealed class MineGameManager : MonoBehaviour
         {
             score = settings.Score;
             playTimeTracker.TotalPlayTime = settings.Playtime;
+            moves = settings.Moves;
         }
         currentLevelIndex = settings.CurrentLevel - 1;
         currentLevelIndex = Mathf.Clamp(currentLevelIndex, 0, LevelCount - 1);
-        currentLevelIndex = 0;
 
         LoadLevel(currentLevelIndex);
         SetupCamera();
@@ -283,25 +254,59 @@ public sealed class MineGameManager : MonoBehaviour
                 break;
 
             default:
-                score = settings.Score;
-                currentLevelIndex = settings.CurrentLevel - 1;
-                LoadLevel(currentLevelIndex);
+                RestartCurrentLevel();
                 break;
         }
     }
 
-    private void ArmLevelStartInput()
+    private void ArmContinueInput()
     {
         DisposeLevelStartInput();
 
         startInputSubscription =
             InputSystem.onAnyButtonPress.Call(control =>
             {
-                if (control.device is Keyboard || control.device is Gamepad || control.device is Mouse)
+                if (control.device is not Keyboard &&
+                    control.device is not Gamepad &&
+                    control.device is not Mouse)
                 {
-                    StartLevel();
+                    return;
+                }
+
+                switch (State)
+                {
+                    case GameState.LevelReady:
+                        StartLevel();
+                        break;
+
+                    case GameState.GameOver:
+                        RestartCurrentLevel();
+                        break;
+
+                    case GameState.Victory:
+                        StartNewGame();
+                        break;
                 }
             });
+    }
+
+
+    private void RestartCurrentLevel()
+    {
+        if (State == GameState.Loading)
+            return;
+
+        score =
+            PlayerPrefs.GetInt(
+                "Score",
+                0);
+
+        currentLevelIndex =
+            PlayerPrefs.GetInt(
+                "CurrentLevel",
+                currentLevelIndex);
+
+        LoadLevel(currentLevelIndex);
     }
 
     public void RequestLevelStart()
@@ -390,6 +395,7 @@ public sealed class MineGameManager : MonoBehaviour
 
     private void LoadLevel(int levelIndex)
     {
+        DisposeLevelStartInput();
         State = GameState.Loading;
         Time.timeScale = 1f;
 
@@ -417,7 +423,7 @@ public sealed class MineGameManager : MonoBehaviour
 
         State = GameState.LevelReady;
         message = "Collect all coal and destroy all rocks. Then collect the key to open the exit.";
-        ArmLevelStartInput();
+        ArmContinueInput();
     }
 
     public bool TryMoveMiner(Vector2Int direction)
@@ -443,34 +449,26 @@ public sealed class MineGameManager : MonoBehaviour
             return false;
         }
 
-        if (board.IsWall(targetPosition))
-        {
-            TriggerGameOver("You crashed into a wall!");
-            return false;
-        }
-
-        if (board.IsExit(targetPosition))
-        {
-            if (TryEnterExit(targetPosition) == false)
-            {
-                TriggerGameOver("The exit is still closed!");
-                return false;
-            }
-        }
-
-        if (board.Tail.Contains(targetPosition))
-        {
-            TriggerGameOver("You crashed into your own tail!");
-            return false;
-        }
-
-
-        LevelBoss boss = board.GetBoss(targetPosition);
+        LevelBoss boss =
+            board.FindBossBlockingMove(
+                currentPosition,
+                targetPosition);
         if (boss != null)
         {
             moves++;
 
             bool destroyed = boss.Hit();
+
+            board.Miner.Bounce();
+
+            Debug.Log(
+                $"Boss collision registered. HP now " +
+                $"{boss.HitPoints}/{boss.MaximumHitPoints}");
+
+            message =
+                destroyed
+                    ? "Boss destroyed!"
+                    : $"Boss hit! {boss.HitPoints}/{boss.MaximumHitPoints} HP remaining.";
 
             if (audioSourceFx != null)
             {
@@ -504,14 +502,30 @@ public sealed class MineGameManager : MonoBehaviour
                 message = "Boss destroyed!";
                 CheckLevelCleared();
             }
-            else
-            {
-                message =
-                    $"Boss hit! {boss.HitPoints}/{boss.MaximumHitPoints} HP remaining.";
-            }
-
             return true;
         }
+
+        if (board.IsWall(targetPosition))
+        {
+            TriggerGameOver("You crashed into a wall!");
+            return false;
+        }
+
+        if (board.IsExit(targetPosition))
+        {
+            if (TryEnterExit(targetPosition) == false)
+            {
+                TriggerGameOver("The exit is still closed!");
+                return false;
+            }
+        }
+
+        if (board.Tail.Contains(targetPosition))
+        {
+            TriggerGameOver("You crashed into your own tail!");
+            return false;
+        }
+
 
         var obstacle = board.GetObstacle(targetPosition);
         if (obstacle != null)
@@ -555,15 +569,29 @@ public sealed class MineGameManager : MonoBehaviour
         if (State != GameState.Playing)
             return;
 
-        audioSource.Pause();
-        audioSourceFx.PlayOneShot(Resources.Load<AudioClip>("Audio/gameOver"));
-        State = GameState.GameOver;
-        message = reason + "\n\nPress Restart.";
-        DisposeLevelStartInput();
-        State = GameState.GameOver;
-        message = reason + " Press R to restart.";
+        audioSource?.Pause();
 
-        Debug.Log($"Game Over: {reason}");
+        AudioClip gameOverClip =
+            Resources.Load<AudioClip>(
+                "Audio/gameOver");
+
+        if (audioSourceFx != null &&
+            gameOverClip != null)
+        {
+            audioSourceFx.PlayOneShot(
+                gameOverClip);
+        }
+
+        State = GameState.GameOver;
+
+        message =
+            reason +
+            " Press any key, mouse button or gamepad button to restart.";
+
+        ArmContinueInput();
+
+        Debug.Log(
+            $"Game Over: {reason}");
     }
 
     private bool TryEnterExit(Vector2Int targetPosition)
@@ -733,10 +761,22 @@ public sealed class MineGameManager : MonoBehaviour
     private void Victory()
     {
         DisposeLevelStartInput();
+
         State = GameState.Victory;
-        score = Math.Clamp(score - moves * 3, 0, int.MaxValue);
+
+        score =
+            Math.Clamp(
+                score - moves * 3,
+                0,
+                int.MaxValue);
+
         SaveCurrentLevel();
-        message = "Congratulations! You completed this level. Final score: " + score;
+
+        message =
+            "Congratulations! You completed all levels. " +
+            "Press any key, mouse button or gamepad button to start a new game.";
+
+        ArmContinueInput();
     }
 
     private void SaveCurrentLevel()

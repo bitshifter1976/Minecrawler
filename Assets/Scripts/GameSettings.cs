@@ -36,6 +36,7 @@ public sealed class GameSettings
 
     private const string MusicMixerParameter = "MusicVolume";
     private const string SfxMixerParameter = "SfxVolume";
+    private const string MovesKey = "Moves";
 
     private static GameSettings instance;
 
@@ -168,6 +169,11 @@ public sealed class GameSettings
     {
         get => PlayerPrefs.GetInt(LastSceneIndexKey, 0);
         set => PlayerPrefs.SetInt(LastSceneIndexKey, Mathf.Max(0, value));
+    }
+    public int Moves 
+    { 
+        get => PlayerPrefs.GetInt(MovesKey, 0);
+        set => PlayerPrefs.SetInt(MovesKey, Mathf.Max(0, value));
     }
 
     /// <summary>

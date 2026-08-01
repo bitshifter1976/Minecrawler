@@ -187,6 +187,14 @@ public sealed class MineBoard
             return false;
         }
 
+        foreach (LevelBoss boss in bosses.Values)
+        {
+            boss.Initialize(
+                levelNumber,
+                Miner,
+                bossProjectileSprite);
+        }
+
         ExitOpen = false;
         UpdateExitAppearance();
 
@@ -270,21 +278,113 @@ public sealed class MineBoard
     }
 
 
-    public bool CanBossMoveTo(
-        LevelBoss boss,
-        Vector2Int position)
+    public LevelBoss FindBossBlockingMove(
+        Vector2Int currentPosition,
+        Vector2Int targetPosition)
     {
-        if (boss == null)
-            return false;
+        Vector2 currentWorld =
+            new(currentPosition.x, currentPosition.y);
 
-        if (!IsInside(position))
-            return false;
+        Vector2 targetWorld =
+            new(targetPosition.x, targetPosition.y);
 
-        if (IsWall(position) ||
-            IsExit(position))
+        foreach (LevelBoss boss in bosses.Values)
         {
-            return false;
+            if (boss == null ||
+                boss.IsDestroyed)
+            {
+                continue;
+            }
+
+            // 1. Das reservierte Grid-Feld des Bosses blockiert immer.
+            if (boss.GridPosition == targetPosition)
+                return boss;
+
+            Vector2 bossWorld =
+                boss.transform.position;
+
+            Vector2Int visibleGridPosition =
+                new(
+                    Mathf.RoundToInt(bossWorld.x),
+                    Mathf.RoundToInt(bossWorld.y));
+
+            // 2. Während einer Animation blockiert auch das aktuell sichtbare Feld.
+            if (visibleGridPosition == targetPosition)
+                return boss;
+
+            // 3. Symmetrische Kollisionsprüfung über den kompletten
+            // Bewegungsschritt des Miners. Dadurch funktioniert der Treffer
+            // von oben, unten, links und rechts identisch.
+            Vector2 movementSegment =
+                targetWorld - currentWorld;
+
+            float segmentLengthSquared =
+                movementSegment.sqrMagnitude;
+
+            if (segmentLengthSquared > 0.0001f)
+            {
+                float t =
+                    Mathf.Clamp01(
+                        Vector2.Dot(
+                            bossWorld - currentWorld,
+                            movementSegment) /
+                        segmentLengthSquared);
+
+                Vector2 closestPoint =
+                    currentWorld +
+                    movementSegment * t;
+
+                if (Vector2.Distance(
+                        bossWorld,
+                        closestPoint) <= 0.92f)
+                {
+                    return boss;
+                }
+            }
+
+            // 4. Zusätzlicher Radius um das Zielfeld, damit der verkleinerte
+            // und wackelnde Sprite nicht optisch durchfahren werden kann.
+            if (Vector2.Distance(
+                    bossWorld,
+                    targetWorld) <= 1.02f)
+            {
+                return boss;
+            }
         }
+
+        return null;
+    }
+
+    public LevelBoss GetBossAtOrNear(Vector2Int position)
+    {
+        LevelBoss exactBoss = GetBoss(position);
+
+        if (exactBoss != null)
+            return exactBoss;
+
+        foreach (LevelBoss boss in bosses.Values)
+        {
+            if (boss == null)
+                continue;
+
+            Vector2Int visiblePosition = new(
+                Mathf.RoundToInt(boss.transform.position.x),
+                Mathf.RoundToInt(boss.transform.position.y));
+
+            if (visiblePosition == position)
+                return boss;
+        }
+
+        return null;
+    }
+
+    public bool CanBossMoveTo(LevelBoss boss, Vector2Int position)
+    {
+        if (boss == null || !IsInside(position))
+            return false;
+
+        if (IsWall(position) || IsExit(position))
+            return false;
 
         if (GetObstacle(position) != null ||
             GetCoal(position) != null ||
@@ -302,7 +402,6 @@ public sealed class MineBoard
         if (tail.Contains(position))
             return false;
 
-        // Das Spielerfeld ist erlaubt, damit der Boss den Miner treffen kann.
         return true;
     }
 
@@ -310,21 +409,14 @@ public sealed class MineBoard
         LevelBoss boss,
         Vector2Int targetPosition)
     {
-        if (!CanBossMoveTo(
-                boss,
-                targetPosition))
-        {
+        if (!CanBossMoveTo(boss, targetPosition))
             return false;
-        }
 
-        Vector2Int oldPosition =
-            boss.GridPosition;
+        Vector2Int oldPosition = boss.GridPosition;
 
         bosses.Remove(oldPosition);
         bosses[targetPosition] = boss;
-
-        boss.ReserveGridPosition(
-            targetPosition);
+        boss.ReserveGridPosition(targetPosition);
 
         return true;
     }
@@ -334,7 +426,22 @@ public sealed class MineBoard
         if (boss == null)
             return;
 
-        bosses.Remove(boss.GridPosition);
+        Vector2Int keyToRemove = default;
+        bool found = false;
+
+        foreach (KeyValuePair<Vector2Int, LevelBoss> entry in bosses)
+        {
+            if (entry.Value != boss)
+                continue;
+
+            keyToRemove = entry.Key;
+            found = true;
+            break;
+        }
+
+        if (found)
+            bosses.Remove(keyToRemove);
+
         Object.Destroy(boss.gameObject);
     }
 
@@ -443,10 +550,6 @@ public sealed class MineBoard
                 bossSprite);
 
         bosses[position] = boss;
-        boss.Initialize(
-            levelNumber,
-            Miner,
-            bossProjectileSprite);
     }
 
     private void CreateMiner(Vector2Int position)

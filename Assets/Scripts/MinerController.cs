@@ -115,6 +115,14 @@ public sealed class MinerController : GridActor
 
     }
 
+
+    public void Bounce()
+    {
+        moveDirection = -moveDirection;
+        moveTimer = 0f;
+        UpdateRotation();
+    }
+
     private void UpdateRotation()
     {
         float angle = moveDirection switch

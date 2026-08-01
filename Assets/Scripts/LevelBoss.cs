@@ -42,6 +42,22 @@ public sealed class LevelBoss : GridActor
     private float wobbleTime;
     private float wobbleSpeed;
     private float wobbleAngle;
+    private float movementBlockedUntil;
+    private bool initialized;
+
+    [Header("Visual")]
+    [SerializeField] private float bossScale = 0.72f;
+    [SerializeField] private float healthBarWidth = 0.95f;
+    [SerializeField] private float healthBarHeight = 0.10f;
+    [SerializeField] private float healthBarOffsetY = 0.72f;
+
+    [Header("Combat")]
+    [SerializeField] private float minimumFireDistance = 2.25f;
+
+    private GameObject healthBarRoot;
+    private SpriteRenderer healthBarBackground;
+    private SpriteRenderer healthBarFill;
+    private static Sprite healthBarSprite;
 
     private BossAttackPattern attackPattern;
     private SpriteRenderer spriteRenderer;
@@ -135,7 +151,13 @@ public sealed class LevelBoss : GridActor
         }
 
         spriteRenderer.sortingOrder = 4;
-        transform.localScale = Vector3.one;
+        transform.localScale =
+            Vector3.one * bossScale;
+
+        CreateHealthBar();
+        UpdateHealthBar();
+
+        initialized = true;
     }
 
     private void Update()
@@ -158,10 +180,18 @@ public sealed class LevelBoss : GridActor
             return;
         }
 
+        UpdateHealthBarPosition();
+        UpdateHealthBar();
+
         UpdateBerserkMode();
         UpdateMovement(game.Board, miner);
 
         if (attackInProgress)
+            return;
+
+        // Im Nahbereich verfolgt und rammt der Boss den Miner,
+        // schießt aber nicht. So bleibt der Nahkampf fair und lesbar.
+        if (IsMinerTooCloseToFire(miner))
             return;
 
         fireTimer -= Time.deltaTime;
@@ -188,17 +218,40 @@ public sealed class LevelBoss : GridActor
         if (destroyed)
             return true;
 
+        if (!initialized)
+        {
+            Debug.LogWarning(
+                "Boss was hit before Initialize(). Applying fallback HP.");
+
+            bossTier = Mathf.Max(1, bossTier);
+            maximumHitPoints = Mathf.Max(1, maximumHitPoints);
+            hitPoints = Mathf.Max(1, hitPoints);
+            initialized = true;
+        }
+
+        int previousHp = hitPoints;
+
         hitPoints =
             Mathf.Max(
                 0,
                 hitPoints - 1);
 
+        UpdateHealthBar();
+
+        movementBlockedUntil =
+            Time.time + 1.0f;
+
         StartCoroutine(HitFlash());
+
+        Debug.Log(
+            $"Boss damage: {previousHp} -> {hitPoints} / {maximumHitPoints}");
 
         if (hitPoints > 0)
             return false;
 
         destroyed = true;
+        UpdateHealthBar();
+        StopAllCoroutines();
         return true;
     }
 
@@ -330,6 +383,15 @@ public sealed class LevelBoss : GridActor
             if (destroyed)
                 yield break;
 
+            MinerController miner =
+                MineGameManager.Instance?.Board?.Miner;
+
+            if (miner == null ||
+                IsMinerTooCloseToFire(miner))
+            {
+                yield break;
+            }
+
             SpawnProjectile(
                 direction,
                 ricochet);
@@ -402,6 +464,15 @@ public sealed class LevelBoss : GridActor
         Vector2 direction,
         bool ricochet)
     {
+        MinerController miner =
+            MineGameManager.Instance?.Board?.Miner;
+
+        if (miner == null ||
+            IsMinerTooCloseToFire(miner))
+        {
+            return;
+        }
+
         GameObject projectileObject =
             new("Boss Projectile");
 
@@ -511,6 +582,185 @@ public sealed class LevelBoss : GridActor
             !board.Tail.Contains(position);
     }
 
+
+    private bool IsMinerTooCloseToFire(
+        MinerController miner)
+    {
+        if (miner == null)
+            return true;
+
+        return Vector2.Distance(
+            transform.position,
+            miner.transform.position) <
+            minimumFireDistance;
+    }
+
+    private void CreateHealthBar()
+    {
+        if (healthBarRoot != null)
+            return;
+
+        healthBarRoot =
+            new GameObject("Boss Health Bar");
+
+        healthBarRoot.transform.SetParent(
+            transform.parent);
+
+        GameObject backgroundObject =
+            new("Background");
+
+        backgroundObject.transform.SetParent(
+            healthBarRoot.transform);
+
+        healthBarBackground =
+            backgroundObject.AddComponent<SpriteRenderer>();
+
+        healthBarBackground.sprite =
+            GetHealthBarSprite();
+
+        healthBarBackground.color =
+            new Color(
+                0.08f,
+                0.03f,
+                0.03f,
+                0.96f);
+
+        healthBarBackground.sortingOrder = 20;
+
+        GameObject fillObject =
+            new("Fill");
+
+        fillObject.transform.SetParent(
+            healthBarRoot.transform);
+
+        healthBarFill =
+            fillObject.AddComponent<SpriteRenderer>();
+
+        healthBarFill.sprite =
+            GetHealthBarSprite();
+
+        healthBarFill.color =
+            new Color(
+                0.20f,
+                0.90f,
+                0.22f,
+                1f);
+
+        healthBarFill.sortingOrder = 21;
+
+        UpdateHealthBarPosition();
+    }
+
+    private void UpdateHealthBarPosition()
+    {
+        if (healthBarRoot == null)
+            return;
+
+        healthBarRoot.transform.position =
+            transform.position +
+            Vector3.up * healthBarOffsetY;
+
+        // Die Anzeige bleibt gerade, auch wenn der Boss wackelt.
+        healthBarRoot.transform.rotation =
+            Quaternion.identity;
+    }
+
+    private void UpdateHealthBar()
+    {
+        if (healthBarRoot == null ||
+            healthBarBackground == null ||
+            healthBarFill == null)
+        {
+            return;
+        }
+
+        float ratio =
+            maximumHitPoints <= 0
+                ? 0f
+                : Mathf.Clamp01(
+                    (float)hitPoints /
+                    maximumHitPoints);
+
+        healthBarBackground.transform.localPosition =
+            Vector3.zero;
+
+        healthBarBackground.transform.localScale =
+            new Vector3(
+                healthBarWidth,
+                healthBarHeight,
+                1f);
+
+        healthBarFill.transform.localScale =
+            new Vector3(
+                healthBarWidth * ratio,
+                healthBarHeight * 0.68f,
+                1f);
+
+        healthBarFill.transform.localPosition =
+            new Vector3(
+                -healthBarWidth *
+                (1f - ratio) *
+                0.5f,
+                0f,
+                -0.01f);
+
+        healthBarFill.color =
+            Color.Lerp(
+                new Color(0.92f, 0.08f, 0.04f),
+                new Color(0.20f, 0.90f, 0.22f),
+                ratio);
+
+        healthBarRoot.SetActive(
+            !destroyed &&
+            hitPoints > 0);
+    }
+
+    private static Sprite GetHealthBarSprite()
+    {
+        if (healthBarSprite != null)
+            return healthBarSprite;
+
+        Texture2D texture =
+            new Texture2D(1, 1)
+            {
+                name = "Runtime Boss Health Bar",
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+        texture.SetPixel(
+            0,
+            0,
+            Color.white);
+
+        texture.Apply();
+
+        healthBarSprite =
+            Sprite.Create(
+                texture,
+                new Rect(
+                    0f,
+                    0f,
+                    1f,
+                    1f),
+                new Vector2(
+                    0.5f,
+                    0.5f),
+                1f);
+
+        healthBarSprite.name =
+            "Runtime Boss Health Bar Sprite";
+
+        return healthBarSprite;
+    }
+
+    private void OnDestroy()
+    {
+        if (healthBarRoot != null)
+            Object.Destroy(healthBarRoot);
+    }
+
     private void UpdateBerserkMode()
     {
         if (bossTier < 9 ||
@@ -533,8 +783,10 @@ public sealed class LevelBoss : GridActor
         MineBoard board,
         MinerController miner)
     {
-        if (movementInProgress ||
-            attackInProgress)
+        if (destroyed ||
+            movementInProgress ||
+            attackInProgress ||
+            Time.time < movementBlockedUntil)
         {
             return;
         }

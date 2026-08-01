@@ -43,7 +43,6 @@ public sealed class MineGameHud : MonoBehaviour
 
         DrawHeader(game, layout.HeaderRect);
         DrawStatus(game, layout.StatusRect);
-        DrawBossHealth(game, layout.BoardRect);
         DrawStateOverlay(game, layout.BoardRect);
     }
 
@@ -205,44 +204,84 @@ public sealed class MineGameHud : MonoBehaviour
     }
 
 
-    private void DrawBossHealth(MineGameManager game, Rect boardRect)
+    private void DrawBossHealth(
+        MineGameManager game,
+        Rect boardRect)
     {
-        if (game.RemainingBosses <= 0 ||
-            game.BossMaximumHitPoints <= 0)
-        {
+        if (game.RemainingBosses <= 0)
             return;
-        }
 
-        float width = Mathf.Min(boardRect.width * 0.55f, 760f * scale);
-        float height = 34f * scale;
-        float x = boardRect.x + (boardRect.width - width) * 0.5f;
-        float y = boardRect.y + 10f * scale;
+        int maximumHp =
+            Mathf.Max(1, game.BossMaximumHitPoints);
 
-        Rect backgroundRect = new(x, y, width, height);
+        int currentHp =
+            Mathf.Clamp(
+                game.BossHitPoints,
+                0,
+                maximumHp);
+
+        float ratio =
+            (float)currentHp / maximumHp;
+
+        float barWidth =
+            Mathf.Min(
+                boardRect.width * 0.68f,
+                880f * scale);
+
+        float barHeight =
+            Mathf.Max(54f, 64f * scale);
+
+        Rect outerRect = new(
+            boardRect.x +
+            (boardRect.width - barWidth) * 0.5f,
+            boardRect.y + 14f * scale,
+            barWidth,
+            barHeight);
+
+        Rect innerRect = new(
+            outerRect.x + 6f * scale,
+            outerRect.y + 6f * scale,
+            Mathf.Max(
+                0f,
+                (outerRect.width - 12f * scale) * ratio),
+            outerRect.height - 12f * scale);
+
+        Color previousColor = GUI.color;
+
+        GUI.color =
+            new Color(0.03f, 0.02f, 0.02f, 0.98f);
+
         GUI.DrawTexture(
-            backgroundRect,
-            panelTexture,
-            ScaleMode.StretchToFill);
+            outerRect,
+            Texture2D.whiteTexture);
 
-        float ratio = Mathf.Clamp01(
-            (float)game.BossHitPoints /
-            game.BossMaximumHitPoints);
-
-        Rect fillRect = new(
-            backgroundRect.x + 4f * scale,
-            backgroundRect.y + 4f * scale,
-            (backgroundRect.width - 8f * scale) * ratio,
-            backgroundRect.height - 8f * scale);
+        GUI.color =
+            Color.Lerp(
+                new Color(0.90f, 0.08f, 0.04f),
+                new Color(0.20f, 0.86f, 0.20f),
+                ratio);
 
         GUI.DrawTexture(
-            fillRect,
-            badgeTexture,
-            ScaleMode.StretchToFill);
+            innerRect,
+            Texture2D.whiteTexture);
+
+        GUI.color = Color.white;
+
+        GUIStyle bossStyle =
+            new GUIStyle(valueStyle)
+            {
+                fontSize = ScaleFont(27),
+                alignment = TextAnchor.MiddleCenter
+            };
+
+        bossStyle.normal.textColor = Color.white;
 
         GUI.Label(
-            backgroundRect,
-            $"{game.BossName}  {game.BossHitPoints}/{game.BossMaximumHitPoints}",
-            titleStyle);
+            outerRect,
+            $"{game.BossName}   HP {currentHp}/{maximumHp}",
+            bossStyle);
+
+        GUI.color = previousColor;
     }
 
     private void DrawStateOverlay(MineGameManager game, Rect boardRect)
@@ -291,7 +330,7 @@ public sealed class MineGameHud : MonoBehaviour
                 "Loading level...",
 
             GameState.LevelReady =>
-                $"LEVEL {game.CurrentLevel}\n\nPress any key to start!",
+                $"LEVEL {game.CurrentLevel}\n\nPress any key, mouse button or gamepad button to start!",
 
             GameState.Paused =>
                 "PAUSED",
@@ -305,7 +344,8 @@ public sealed class MineGameHud : MonoBehaviour
             GameState.Victory =>
                 "CONGRATULATIONS!\n\n" +
                 $"You completed all {game.TotalLevels} levels!\n\n" +
-                $"Final score: {game.Score:N0}",
+                $"Final score: {game.Score:N0}\n\n" +
+                "Press any key, mouse button or gamepad button to start a new game.",
 
             _ => null
         };
