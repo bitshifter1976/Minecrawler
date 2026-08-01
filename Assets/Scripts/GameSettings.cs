@@ -271,6 +271,14 @@ public sealed class GameSettings
         Initialize();
     }
 
+    public void ResetForNewGame()
+    {
+        CurrentLevel = 1;
+        Score = 0;
+        Playtime = 0f;
+        Moves = 0;
+    }
+
     private static float LinearToDb(float value)
     {
         return value <= 0.0001f

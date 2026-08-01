@@ -114,7 +114,7 @@ public class MenuController : MonoBehaviour
         if (startClip != null)
             audioSource.PlayOneShot(startClip);
 
-        PlayerPrefs.SetInt("ContinueGame", 0);
+        settings.ResetForNewGame();
         SceneManager.LoadScene("Game");
     }
 
