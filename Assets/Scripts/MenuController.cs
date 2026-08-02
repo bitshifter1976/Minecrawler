@@ -72,7 +72,9 @@ public class MenuController : MonoBehaviour
         buttonNew.onClick.AddListener(OnNewGameClicked);
         buttonContinue.onClick.AddListener(OnContinueGameClicked);
         buttonOptions.onClick.AddListener(OnOptionsClicked);   
-        buttonEnd.onClick.AddListener(OnEndGameClicked);        
+        buttonEnd.onClick.AddListener(OnEndGameClicked);
+
+        ConfigureNavigation();
 
         EventSystem.current.SetSelectedGameObject(null);
         EventSystem.current.SetSelectedGameObject(buttonNew.gameObject);
@@ -83,6 +85,48 @@ public class MenuController : MonoBehaviour
         {
             AddHoverSelection(button);
         }
+    }
+    private void ConfigureNavigation()
+    {
+        SetNavigation(
+            buttonNew,
+            buttonEnd,
+            buttonContinue);
+
+        SetNavigation(
+            buttonContinue,
+            buttonNew,
+            buttonOptions);
+
+        SetNavigation(
+            buttonOptions,
+            buttonContinue,
+            buttonEnd);
+
+        SetNavigation(
+            buttonEnd,
+            buttonOptions,
+            buttonNew);
+    }
+
+    private static void SetNavigation(
+        Button button,
+        Selectable selectOnUp,
+        Selectable selectOnDown)
+    {
+        Navigation navigation = button.navigation;
+
+        navigation.mode =
+            Navigation.Mode.Explicit;
+
+        navigation.selectOnUp =
+            selectOnUp;
+
+        navigation.selectOnDown =
+            selectOnDown;
+
+        button.navigation =
+            navigation;
     }
 
     private void AddHoverSelection(Button button)

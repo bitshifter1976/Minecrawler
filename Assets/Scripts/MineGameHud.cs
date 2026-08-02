@@ -63,9 +63,12 @@ public sealed class MineGameHud : MonoBehaviour
 
         HudLayout layout = HudLayout.Create(scale);
 
-        // Zuerst die seitlichen Balken zeichnen.
-        // Danach liegen obere HUD- und Statusleiste sichtbar darüber.
-        DrawSidePosts(layout.BoardRect);
+        // Schwarze Letterbox-Bereiche oberhalb und unterhalb des Levels
+        // werden zuerst mit WoodenPlate gefüllt.
+        DrawWoodenBoardGaps(game, layout);
+
+        // Danach folgen seitliche Balken, HUD und Statusleiste.
+        DrawSidePosts(game, layout.BoardRect);
         DrawHeader(game, layout.HeaderRect);
         DrawStatus(game, layout.StatusRect);
         DrawStateOverlay(game, layout.BoardRect);
@@ -571,49 +574,272 @@ public sealed class MineGameHud : MonoBehaviour
     }
 
 
-    private void DrawSidePosts(Rect boardRect)
+
+    private void DrawWoodenBoardGaps(
+        MineGameManager game,
+        HudLayout layout)
+    {
+        if (woodPanelTexture == null ||
+            !TryGetBoardScreenBounds(
+                game,
+                out Rect boardScreenRect))
+        {
+            return;
+        }
+
+        float gameplayTop =
+            layout.BoardRect.y;
+
+        float gameplayBottom =
+            layout.BoardRect.yMax;
+
+        float visibleBoardTop =
+            Mathf.Clamp(
+                boardScreenRect.y,
+                gameplayTop,
+                gameplayBottom);
+
+        float visibleBoardBottom =
+            Mathf.Clamp(
+                boardScreenRect.yMax,
+                gameplayTop,
+                gameplayBottom);
+
+        float topGapHeight =
+            Mathf.Max(
+                0f,
+                visibleBoardTop -
+                gameplayTop);
+
+        float bottomGapHeight =
+            Mathf.Max(
+                0f,
+                gameplayBottom -
+                visibleBoardBottom);
+
+        if (topGapHeight > 0.5f)
+        {
+            Rect topGap =
+                new Rect(
+                    layout.BoardRect.x,
+                    gameplayTop,
+                    layout.BoardRect.width,
+                    topGapHeight + 1f);
+
+            DrawWoodenGapPlate(
+                topGap,
+                false);
+        }
+
+        if (bottomGapHeight > 0.5f)
+        {
+            Rect bottomGap =
+                new Rect(
+                    layout.BoardRect.x,
+                    visibleBoardBottom - 1f,
+                    layout.BoardRect.width,
+                    bottomGapHeight + 1f);
+
+            DrawWoodenGapPlate(
+                bottomGap,
+                true);
+        }
+    }
+
+    private void DrawWoodenGapPlate(
+        Rect rect,
+        bool flipVertically)
+    {
+        if (woodPanelTexture == null ||
+            rect.width <= 0f ||
+            rect.height <= 0f)
+        {
+            return;
+        }
+
+        Rect textureCoordinates =
+            flipVertically
+                ? new Rect(
+                    0f,
+                    1f,
+                    1f,
+                    -1f)
+                : new Rect(
+                    0f,
+                    0f,
+                    1f,
+                    1f);
+
+        GUI.DrawTextureWithTexCoords(
+            rect,
+            woodPanelTexture,
+            textureCoordinates,
+            true);
+
+        // Leichte Abdunklung, damit die Füllflächen optisch zum Rahmen passen.
+        Color previousColor =
+            GUI.color;
+
+        GUI.color =
+            new Color(
+                0f,
+                0f,
+                0f,
+                0.16f);
+
+        GUI.DrawTexture(
+            rect,
+            Texture2D.whiteTexture,
+            ScaleMode.StretchToFill);
+
+        GUI.color =
+            previousColor;
+    }
+
+    private static bool TryGetBoardScreenBounds(
+        MineGameManager game,
+        out Rect boardRect)
+    {
+        boardRect = default;
+
+        Camera camera =
+            Camera.main;
+
+        if (camera == null ||
+            game?.Board == null ||
+            game.Board.Width <= 0 ||
+            game.Board.Height <= 0)
+        {
+            return false;
+        }
+
+        Vector3 bottomLeft =
+            camera.WorldToScreenPoint(
+                new Vector3(
+                    -0.5f,
+                    -0.5f,
+                    0f));
+
+        Vector3 topRight =
+            camera.WorldToScreenPoint(
+                new Vector3(
+                    game.Board.Width - 0.5f,
+                    game.Board.Height - 0.5f,
+                    0f));
+
+        float left =
+            Mathf.Min(
+                bottomLeft.x,
+                topRight.x);
+
+        float right =
+            Mathf.Max(
+                bottomLeft.x,
+                topRight.x);
+
+        // Screen coordinates start at the bottom;
+        // IMGUI coordinates start at the top.
+        float top =
+            Screen.height -
+            Mathf.Max(
+                bottomLeft.y,
+                topRight.y);
+
+        float bottom =
+            Screen.height -
+            Mathf.Min(
+                bottomLeft.y,
+                topRight.y);
+
+        boardRect =
+            Rect.MinMaxRect(
+                left,
+                top,
+                right,
+                bottom);
+
+        return true;
+    }
+
+    private void DrawSidePosts(
+        MineGameManager game,
+        Rect gameplayRect)
     {
         if (woodenPostTexture == null)
             return;
 
-        // Die Pfosten gehen über die komplette Höhe:
-        // von ganz oben bis ganz unten.
-        float postWidth =
+        if (!TryGetBoardScreenBounds(
+                game,
+                out Rect boardScreenRect))
+        {
+            return;
+        }
+
+        float boardLeft =
             Mathf.Clamp(
-                90f * scale,
-                48f,
-                96f);
+                boardScreenRect.xMin,
+                gameplayRect.xMin,
+                gameplayRect.xMax);
 
-        Rect leftPostRect =
-            new Rect(
-                0f,
-                0f,
-                postWidth,
-                Screen.height);
+        float boardRight =
+            Mathf.Clamp(
+                boardScreenRect.xMax,
+                gameplayRect.xMin,
+                gameplayRect.xMax);
 
-        Rect rightPostRect =
-            new Rect(
-                Screen.width - postWidth,
+        float leftWidth =
+            Mathf.Max(
                 0f,
-                postWidth,
-                Screen.height);
+                boardLeft -
+                gameplayRect.xMin);
 
-        GUI.DrawTexture(
-            leftPostRect,
-            woodenPostTexture,
-            ScaleMode.StretchToFill,
-            true);
-
-        // Rechte Seite sauber gespiegelt.
-        GUI.DrawTextureWithTexCoords(
-            rightPostRect,
-            woodenPostTexture,
-            new Rect(
-                1f,
+        float rightWidth =
+            Mathf.Max(
                 0f,
-                -1f,
-                1f),
-            true);
+                gameplayRect.xMax -
+                boardRight);
+
+        // Kleine Überlappung verhindert schwarze 1-Pixel-Nähte.
+        float overlap =
+            Mathf.Max(
+                2f,
+                3f * scale);
+
+        if (leftWidth > 0.5f)
+        {
+            Rect leftPostRect =
+                new Rect(
+                    gameplayRect.xMin,
+                    0f,
+                    leftWidth + overlap,
+                    Screen.height);
+
+            GUI.DrawTexture(
+                leftPostRect,
+                woodenPostTexture,
+                ScaleMode.StretchToFill,
+                true);
+        }
+
+        if (rightWidth > 0.5f)
+        {
+            Rect rightPostRect =
+                new Rect(
+                    boardRight - overlap,
+                    0f,
+                    rightWidth + overlap,
+                    Screen.height);
+
+            GUI.DrawTextureWithTexCoords(
+                rightPostRect,
+                woodenPostTexture,
+                new Rect(
+                    1f,
+                    0f,
+                    -1f,
+                    1f),
+                true);
+        }
     }
 
     private void DrawStateOverlay(MineGameManager game, Rect boardRect)
