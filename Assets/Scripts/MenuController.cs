@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Audio;
 using UnityEngine.EventSystems;
@@ -22,6 +23,8 @@ public class MenuController : MonoBehaviour
     public AudioClip ambienceClip;
     public AudioClip windClip;
 
+    public TMP_Text versionText;
+
     public Button[] buttons;
 
     private GameObject lastSelectedObject;
@@ -32,6 +35,8 @@ public class MenuController : MonoBehaviour
         settings = GameSettings.Load();
         settings.UseSettings(audioMixer);
         settings.LastSceneIndex = 0;
+
+        versionText.text = MineGameManager.Version;
 
         gameObject.AddComponent<FallingRockSpawner>();
         gameObject.AddComponent<WaterDropSpawner>();

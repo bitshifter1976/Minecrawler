@@ -9,7 +9,7 @@ using Debug = UnityEngine.Debug;
 
 public sealed class MineGameManager : MonoBehaviour
 {
-    public readonly string Version = "v1.3";
+    public static readonly string Version = "v1.4";
 
     private IDisposable startInputSubscription;
     private const int LevelCount = 100;
@@ -31,6 +31,8 @@ public sealed class MineGameManager : MonoBehaviour
     private Vector2Int exitDirection;
     private int lastScreenWidth;
     private int lastScreenHeight;
+    private bool lastShowHud;
+    private bool lastShowStatusbar;
 
     private GameSettings settings;
 
@@ -798,8 +800,11 @@ public sealed class MineGameManager : MonoBehaviour
 
     private void LateUpdate()
     {
+        settings ??= GameSettings.Load();
         if (Screen.width == lastScreenWidth &&
-            Screen.height == lastScreenHeight)
+            Screen.height == lastScreenHeight &&
+            lastShowHud==settings.ShowHud &&
+            lastShowStatusbar==settings.ShowStatusbar)
         {
             return;
         }
@@ -836,6 +841,9 @@ public sealed class MineGameManager : MonoBehaviour
 
         lastScreenWidth = Screen.width;
         lastScreenHeight = Screen.height;
+        settings ??= GameSettings.Load();
+        lastShowHud=settings.ShowHud;
+        lastShowStatusbar=settings.ShowStatusbar;
 
         camera.rect = new Rect(0f, 0f, 1f, 1f);
 
@@ -846,15 +854,13 @@ public sealed class MineGameManager : MonoBehaviour
         float screenHeight = Mathf.Max(1f, Screen.height);
         float screenAspect = screenWidth / screenHeight;
 
-        float gameplayTopPixels =
-            MineGameHud.TopMargin +
-            MineGameHud.HeaderHeight +
-            MineGameHud.LevelGap;
+        settings ??= GameSettings.Load();
+        float gameplayTopPixels = MineGameHud.TopMargin +
+            (settings.ShowHud ? MineGameHud.HeaderHeight + MineGameHud.LevelGap : 0f);
 
         float gameplayBottomPixels =
-            MineGameHud.StatusHeight +
-            MineGameHud.BottomMargin +
-            MineGameHud.LevelGap;
+            (settings.ShowStatusbar ? MineGameHud.StatusHeight + MineGameHud.LevelGap : 0f) +
+            MineGameHud.BottomMargin;
 
         float gameplayHeightPixels =
             Mathf.Max(

@@ -27,6 +27,12 @@ public sealed class MineGameHud : MonoBehaviour
 
     private float scale = 1f;
     private float lastStyleScale = -1f;
+    private GameSettings settings;
+
+    private void Awake()
+    {
+        settings = GameSettings.Load();
+    }
 
     private void OnGUI()
     {
@@ -39,10 +45,16 @@ public sealed class MineGameHud : MonoBehaviour
         UpdateScale();
         EnsureResources();
 
-        HudLayout layout = HudLayout.Create(scale);
+        settings ??= GameSettings.Load();
 
-        DrawHeader(game, layout.HeaderRect);
-        DrawStatus(game, layout.StatusRect);
+        HudLayout layout = HudLayout.Create(scale, settings.ShowHud, settings.ShowStatusbar);
+
+        if (settings.ShowHud)
+            DrawHeader(game, layout.HeaderRect);
+
+        if (settings.ShowStatusbar)
+            DrawStatus(game, layout.StatusRect);
+
         DrawStateOverlay(game, layout.BoardRect);
     }
 
@@ -199,7 +211,7 @@ public sealed class MineGameHud : MonoBehaviour
                 rect.y,
                 Mathf.Max(1f, rect.width),
                 Mathf.Max(1f, rect.height)),
-            $"MineCrawler {game.Version}   -   {game.Message}",
+            $"MineCrawler {MineGameManager.Version}   -   {game.Message}",
             statusStyle);
     }
 
@@ -402,35 +414,17 @@ public sealed class MineGameHud : MonoBehaviour
             StatusRect = statusRect;
         }
 
-        public static HudLayout Create(float uiScale)
+        public static HudLayout Create(float uiScale,bool showHud,bool showStatusbar)
         {
-            float width = Mathf.Max(1f, Screen.width);
-
-            // Die Höhen bleiben identisch zu den Konstanten, weil der
-            // MineGameManager genau diesen Platz für die Kamera reserviert.
-            Rect header = new Rect(
-                0f,
-                TopMargin,
-                width,
-                HeaderHeight);
-
-            float boardTop = TopMargin + HeaderHeight + LevelGap;
-            float boardBottom =
-                Screen.height - StatusHeight - BottomMargin - LevelGap;
-
-            Rect board = new Rect(
-                0f,
-                boardTop,
-                width,
-                Mathf.Max(1f, boardBottom - boardTop));
-
-            Rect status = new Rect(
-                0f,
-                Screen.height - StatusHeight - BottomMargin,
-                width,
-                StatusHeight);
-
-            return new HudLayout(header, board, status);
+            float width=Mathf.Max(1f,Screen.width);
+            float hh=showHud?HeaderHeight:0f;
+            float sh=showStatusbar?StatusHeight:0f;
+            float top=TopMargin+hh+(showHud?LevelGap:0f);
+            float bottom=Screen.height-sh-BottomMargin-(showStatusbar?LevelGap:0f);
+            Rect header=new Rect(0f,TopMargin,width,hh);
+            Rect board=new Rect(0f,top,width,Mathf.Max(1f,bottom-top));
+            Rect status=new Rect(0f,Screen.height-sh-BottomMargin,width,sh);
+            return new HudLayout(header,board,status);
         }
     }
 }
