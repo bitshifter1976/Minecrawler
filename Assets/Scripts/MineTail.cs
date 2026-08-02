@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 public sealed class MineTail
 {
@@ -51,8 +50,11 @@ public sealed class MineTail
 
     public void Add(TailSegment segment)
     {
-        if (segment != null)
-            segments.Add(segment);
+        if (segment == null)
+            return;
+
+        segments.Add(segment);
+        RefreshDustRoles();
     }
 
     public void Clear()
@@ -60,19 +62,46 @@ public sealed class MineTail
         segments.Clear();
     }
 
-    public void RemoveOutside(int boardWidth, int boardHeight)
+    private void RefreshDustRoles()
     {
-        while (segments.Count > 0)
+        for (int index = 0;
+             index < segments.Count;
+             index++)
         {
-            TailSegment firstSegment = segments[0];
+            TailSegment segment =
+                segments[index];
 
-            if (firstSegment == null)
+            if (segment == null)
+                continue;
+
+            segment.SetDustEnabled(
+                index == 0);
+        }
+    }
+
+
+    public void RemoveOutside(
+        int boardWidth,
+        int boardHeight)
+    {
+        bool removedAny = false;
+
+        for (int index = segments.Count - 1;
+             index >= 0;
+             index--)
+        {
+            TailSegment segment =
+                segments[index];
+
+            if (segment == null)
             {
-                segments.RemoveAt(0);
+                segments.RemoveAt(index);
+                removedAny = true;
                 continue;
             }
 
-            Vector2Int position = firstSegment.GridPosition;
+            Vector2Int position =
+                segment.GridPosition;
 
             bool isOutside =
                 position.x < 0 ||
@@ -81,10 +110,34 @@ public sealed class MineTail
                 position.y >= boardHeight;
 
             if (!isOutside)
-                break;
+                continue;
 
-            Object.Destroy(firstSegment.gameObject);
-            segments.RemoveAt(0);
+            UnityEngine.Object.Destroy(
+                segment.gameObject);
+
+            segments.RemoveAt(index);
+            removedAny = true;
         }
+
+        if (removedAny)
+            RefreshDustRoles();
+    }
+
+    public void DeleteOnExit()
+    {
+        if (segments.Count == 0)
+            return;
+
+        TailSegment firstSegment =
+            segments[0];
+
+        if (firstSegment != null)
+        {
+            UnityEngine.Object.Destroy(
+                firstSegment.gameObject);
+        }
+
+        segments.RemoveAt(0);
+        RefreshDustRoles();
     }
 }

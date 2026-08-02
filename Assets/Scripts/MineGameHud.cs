@@ -399,7 +399,7 @@ public sealed class MineGameHud : MonoBehaviour
         // von ganz oben bis ganz unten.
         float postWidth =
             Mathf.Clamp(
-                68f * scale,
+                90f * scale,
                 48f,
                 96f);
 

@@ -7,12 +7,19 @@ public sealed class MinerController : GridActor
 
     private Vector2Int moveDirection = Vector2Int.right;
     private float moveTimer;
+    private MinerDustTrail dustTrail;
 
     private void Awake()
     {
         controls = new MineControls();
         moveDirection = Vector2Int.right;
         UpdateRotation();
+
+        dustTrail =
+            GetComponent<MinerDustTrail>();
+
+        if (dustTrail == null)
+            dustTrail = gameObject.AddComponent<MinerDustTrail>();
     }
 
     private void OnEnable()
@@ -53,7 +60,17 @@ public sealed class MinerController : GridActor
 
         moveTimer -= game.AutomaticMoveInterval;
 
+        Vector3 previousPosition =
+            transform.position;
+
         game.TryMoveMiner(moveDirection);
+
+        if (transform.position != previousPosition)
+        {
+            dustTrail?.EmitMovementDust(
+                previousPosition,
+                moveDirection);
+        }
     }
 
     private void OnMove(InputAction.CallbackContext context)
