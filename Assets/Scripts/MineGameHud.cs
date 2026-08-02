@@ -20,6 +20,10 @@ public sealed class MineGameHud : MonoBehaviour
     private GUIStyle statusStyle;
     private GUIStyle overlayStyle;
     private GUIStyle overlayBoxStyle;
+    private GUIStyle overlayTitleStyle;
+    private GUIStyle overlayInfoStyle;
+
+    private Font hudDisplayFont;
 
     private Texture2D panelTexture;
     private Texture2D badgeTexture;
@@ -36,7 +40,23 @@ public sealed class MineGameHud : MonoBehaviour
         if (game == null)
             return;
 
-        GUI.skin.font = Resources.Load<Font>("Fonts/RUBIK-LIGHT SDF");
+        GUI.skin.font =
+            Resources.Load<Font>(
+                "Fonts/CinzelDecorative-Black");
+
+        if (hudDisplayFont == null)
+        {
+            hudDisplayFont =
+                Resources.Load<Font>(
+                    "Fonts/CinzelDecorative-Black");
+
+            if (hudDisplayFont == null)
+            {
+                hudDisplayFont =
+                    Resources.Load<Font>(
+                        "Fonts/CinzelDecorative-Black");
+            }
+        }
 
         UpdateScale();
         EnsureResources();
@@ -106,16 +126,26 @@ public sealed class MineGameHud : MonoBehaviour
 
         titleStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = ScaleFont(32),
+            font =
+                hudDisplayFont != null
+                    ? hudDisplayFont
+                    : GUI.skin.font,
+
+            fontSize = ScaleFont(34),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             clipping = TextClipping.Clip
         };
-        titleStyle.normal.textColor = new Color(0.88f, 0.67f, 0.24f);
+        titleStyle.normal.textColor = Color.white;
 
         valueStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = ScaleFont(42),
+            font =
+                hudDisplayFont != null
+                    ? hudDisplayFont
+                    : GUI.skin.font,
+
+            fontSize = ScaleFont(29),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             clipping = TextClipping.Clip
@@ -132,15 +162,25 @@ public sealed class MineGameHud : MonoBehaviour
         };
         statusStyle.normal.textColor = new Color(0.94f, 0.94f, 0.90f);
 
-        overlayStyle = new GUIStyle(GUI.skin.label)
+        overlayTitleStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = ScaleFont(42),
+            fontSize = ScaleFont(46),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
-            wordWrap = true,
-            clipping = TextClipping.Clip
+            wordWrap = true
         };
-        overlayStyle.normal.textColor = Color.white;
+        overlayTitleStyle.normal.textColor = Color.white;
+
+        overlayInfoStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = ScaleFont(22),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            wordWrap = true
+        };
+        overlayInfoStyle.normal.textColor = new Color(0.94f,0.92f,0.84f);
+
+        overlayStyle = overlayTitleStyle;
 
         overlayBoxStyle = new GUIStyle(GUI.skin.box);
         overlayBoxStyle.normal.background = panelTexture;
@@ -192,6 +232,147 @@ public sealed class MineGameHud : MonoBehaviour
 
             x += badgeWidth + gap;
         }
+    }
+
+
+    private static readonly Color BurnGlow =
+        new Color(1f, 0.36f, 0.04f, 0.22f);
+
+    private static readonly Color BurnShadow =
+        new Color(0.025f, 0.012f, 0.004f, 0.98f);
+
+    private static readonly Color BurnBody =
+        new Color(0.19f, 0.065f, 0.014f, 1f);
+
+    private static readonly Color BurnEdge =
+        new Color(0.90f, 0.42f, 0.08f, 1f);
+
+    private static readonly Color BrassShadow =
+        new Color(0.07f, 0.035f, 0.008f, 0.96f);
+
+    private static readonly Color BrassDark =
+        new Color(0.42f, 0.22f, 0.045f, 1f);
+
+    private static readonly Color BrassMain =
+        new Color(0.93f, 0.70f, 0.25f, 1f);
+
+    private static readonly Color BrassHighlight =
+        new Color(1f, 0.91f, 0.58f, 0.82f);
+
+    private void DrawBurnedHeading(
+        Rect rect,
+        string text,
+        GUIStyle style)
+    {
+        Color previousColor = GUI.color;
+
+        float glowOffset =
+            Mathf.Max(
+                1f,
+                2f * scale);
+
+        GUI.color = BurnGlow;
+
+        Vector2[] offsets =
+        {
+            new(-glowOffset, 0f),
+            new(glowOffset, 0f),
+            new(0f, -glowOffset),
+            new(0f, glowOffset),
+            new(-glowOffset, -glowOffset),
+            new(glowOffset, -glowOffset),
+            new(-glowOffset, glowOffset),
+            new(glowOffset, glowOffset)
+        };
+
+        foreach (Vector2 offset in offsets)
+        {
+            GUI.Label(
+                new Rect(
+                    rect.x + offset.x,
+                    rect.y + offset.y,
+                    rect.width,
+                    rect.height),
+                text,
+                style);
+        }
+
+        GUI.color = BurnShadow;
+
+        GUI.Label(
+            new Rect(
+                rect.x + 2f * scale,
+                rect.y + 3f * scale,
+                rect.width,
+                rect.height),
+            text,
+            style);
+
+        GUI.color = BurnBody;
+
+        GUI.Label(
+            new Rect(
+                rect.x + 1f * scale,
+                rect.y + 1f * scale,
+                rect.width,
+                rect.height),
+            text,
+            style);
+
+        GUI.color = BurnEdge;
+        GUI.Label(rect, text, style);
+
+        GUI.color = previousColor;
+    }
+
+    private void DrawBrassValue(
+        Rect rect,
+        string text,
+        GUIStyle style)
+    {
+        Color previousColor = GUI.color;
+
+        // Strong drop shadow.
+        GUI.color = BrassShadow;
+
+        GUI.Label(
+            new Rect(
+                rect.x + 2f * scale,
+                rect.y + 3f * scale,
+                rect.width,
+                rect.height),
+            text,
+            style);
+
+        // Dark brass bevel.
+        GUI.color = BrassDark;
+
+        GUI.Label(
+            new Rect(
+                rect.x + 1f * scale,
+                rect.y + 1f * scale,
+                rect.width,
+                rect.height),
+            text,
+            style);
+
+        // Main metal color.
+        GUI.color = BrassMain;
+        GUI.Label(rect, text, style);
+
+        // Small upper-left highlight creates an inset metallic edge.
+        GUI.color = BrassHighlight;
+
+        GUI.Label(
+            new Rect(
+                rect.x - 0.7f * scale,
+                rect.y - 0.7f * scale,
+                rect.width,
+                rect.height),
+            text,
+            style);
+
+        GUI.color = previousColor;
     }
 
     private void DrawBadge(Rect rect, string title, string value)
@@ -256,7 +437,7 @@ public sealed class MineGameHud : MonoBehaviour
                  textBlockHeight) *
                 0.35f);
 
-        GUI.Label(
+        DrawBurnedHeading(
             new Rect(
                 rect.x,
                 textStartY,
@@ -265,7 +446,7 @@ public sealed class MineGameHud : MonoBehaviour
             title,
             titleStyle);
 
-        GUI.Label(
+        DrawBrassValue(
             new Rect(
                 rect.x,
                 textStartY +
@@ -304,7 +485,7 @@ public sealed class MineGameHud : MonoBehaviour
                 rect.y,
                 Mathf.Max(1f, rect.width),
                 Mathf.Max(1f, rect.height)),
-            $"MineCrawler {MineGameManager.Version}   -   {game.Message}",
+            game.Message,
             statusStyle);
     }
 
@@ -463,14 +644,34 @@ public sealed class MineGameHud : MonoBehaviour
 
         GUI.Box(boxRect, GUIContent.none, overlayBoxStyle);
 
-        GUI.Label(
-            new Rect(
+        Rect contentRect = new Rect(
                 boxRect.x + padding,
                 boxRect.y + padding,
                 Mathf.Max(1f, boxRect.width - padding * 2f),
-                Mathf.Max(1f, boxRect.height - padding * 2f)),
-            text,
-            overlayStyle);
+                Mathf.Max(1f, boxRect.height - padding * 2f));
+
+        string[] lines = text.Split('\n');
+
+        float y = contentRect.y;
+
+        for(int i=0;i<lines.Length;i++)
+        {
+            if(string.IsNullOrWhiteSpace(lines[i]))
+            {
+                y += 12f * scale;
+                continue;
+            }
+
+            GUIStyle style = (i==0) ? overlayTitleStyle : overlayInfoStyle;
+            float h = style.CalcHeight(new GUIContent(lines[i]), contentRect.width);
+
+            GUI.Label(
+                new Rect(contentRect.x,y,contentRect.width,h),
+                lines[i],
+                style);
+
+            y += h + 4f * scale;
+        }
     }
 
     private static string GetOverlayText(MineGameManager game)
@@ -481,13 +682,13 @@ public sealed class MineGameHud : MonoBehaviour
                 "Loading level...",
 
             GameState.LevelReady =>
-                $"LEVEL {game.CurrentLevel}\n\nPress any key, mouse button or gamepad button to start!",
+                $"LEVEL   {game.CurrentLevel}\n\nPress any key to start!",
 
             GameState.Paused =>
                 "PAUSED",
 
             GameState.LevelCompleted =>
-                $"LEVEL {game.CurrentLevel} COMPLETE\n\nScore: {game.Score:N0}",
+                $"LEVEL   {game.CurrentLevel} COMPLETE\n\nScore: {game.Score:N0}",
 
             GameState.GameOver =>
                 $"GAME OVER\n\n{game.Message}\n\nScore: {game.Score:N0}",
@@ -496,7 +697,7 @@ public sealed class MineGameHud : MonoBehaviour
                 "CONGRATULATIONS!\n\n" +
                 $"You completed all {game.TotalLevels} levels!\n\n" +
                 $"Final score: {game.Score:N0}\n\n" +
-                "Press any key, mouse button or gamepad button to start a new game.",
+                "Press any key to start a new game.",
 
             _ => null
         };
