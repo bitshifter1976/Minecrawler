@@ -4,8 +4,8 @@ using UnityEngine;
 public sealed class MineGameHud : MonoBehaviour
 {
     // Diese Konstanten werden vom MineGameManager für das Kamera-Layout verwendet.
-    public const float HeaderHeight = 100f;
-    public const float StatusHeight = 80f;
+    public const float HeaderHeight = 170f;
+    public const float StatusHeight = 90f;
     public const float TopMargin = 0f;
     public const float BottomMargin = 0f;
     public const float LevelGap = 0f;
@@ -24,15 +24,11 @@ public sealed class MineGameHud : MonoBehaviour
     private Texture2D panelTexture;
     private Texture2D badgeTexture;
     private Texture2D statusTexture;
+    private Texture2D woodPanelTexture;
+    private Texture2D woodenPostTexture;
 
     private float scale = 1f;
     private float lastStyleScale = -1f;
-    private GameSettings settings;
-
-    private void Awake()
-    {
-        settings = GameSettings.Load();
-    }
 
     private void OnGUI()
     {
@@ -45,16 +41,13 @@ public sealed class MineGameHud : MonoBehaviour
         UpdateScale();
         EnsureResources();
 
-        settings ??= GameSettings.Load();
+        HudLayout layout = HudLayout.Create(scale);
 
-        HudLayout layout = HudLayout.Create(scale, settings.ShowHud, settings.ShowStatusbar);
-
-        if (settings.ShowHud)
-            DrawHeader(game, layout.HeaderRect);
-
-        if (settings.ShowStatusbar)
-            DrawStatus(game, layout.StatusRect);
-
+        // Zuerst die seitlichen Balken zeichnen.
+        // Danach liegen obere HUD- und Statusleiste sichtbar darüber.
+        DrawSidePosts(layout.BoardRect);
+        DrawHeader(game, layout.HeaderRect);
+        DrawStatus(game, layout.StatusRect);
         DrawStateOverlay(game, layout.BoardRect);
     }
 
@@ -70,6 +63,22 @@ public sealed class MineGameHud : MonoBehaviour
     {
         if (panelTexture == null)
         {
+            Sprite woodPanelSprite =
+                Resources.Load<Sprite>("Art/WoodenPlate");
+
+            woodPanelTexture =
+                woodPanelSprite != null
+                    ? woodPanelSprite.texture
+                    : null;
+
+            Sprite woodenPostSprite =
+                Resources.Load<Sprite>("Art/WoodenPost");
+
+            woodenPostTexture =
+                woodenPostSprite != null
+                    ? woodenPostSprite.texture
+                    : null;
+
             panelTexture = CreateTexture(
                 new Color(0.055f, 0.045f, 0.04f, 0.98f),
                 "MineGameHud Panel");
@@ -97,7 +106,7 @@ public sealed class MineGameHud : MonoBehaviour
 
         titleStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = ScaleFont(28),
+            fontSize = ScaleFont(32),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             clipping = TextClipping.Clip
@@ -106,7 +115,7 @@ public sealed class MineGameHud : MonoBehaviour
 
         valueStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = ScaleFont(34),
+            fontSize = ScaleFont(42),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             clipping = TextClipping.Clip
@@ -115,7 +124,7 @@ public sealed class MineGameHud : MonoBehaviour
 
         statusStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = ScaleFont(34),
+            fontSize = ScaleFont(30),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             wordWrap = true,
@@ -144,7 +153,12 @@ public sealed class MineGameHud : MonoBehaviour
 
     private void DrawHeader(MineGameManager game, Rect rect)
     {
-        GUI.DrawTexture(rect, panelTexture, ScaleMode.StretchToFill);
+        GUI.DrawTexture(
+            rect,
+            woodPanelTexture != null
+                ? woodPanelTexture
+                : panelTexture,
+            ScaleMode.StretchToFill);
 
         const int badgeCount = 6;
         float gap = BadgeGap * scale;
@@ -182,28 +196,107 @@ public sealed class MineGameHud : MonoBehaviour
 
     private void DrawBadge(Rect rect, string title, string value)
     {
-        GUI.DrawTexture(rect, badgeTexture, ScaleMode.StretchToFill);
+        Rect panelRect =
+            new Rect(
+                rect.x,
+                rect.y - 5f * scale,
+                rect.width,
+                rect.height + 10f * scale);
 
-        float titleHeight = rect.height * 0.42f;
+        GUI.DrawTexture(
+            panelRect,
+            woodPanelTexture != null
+                ? woodPanelTexture
+                : badgeTexture,
+            ScaleMode.StretchToFill);
+
+        Color previousColor = GUI.color;
+
+        GUI.color =
+            new Color(0f, 0f, 0f, 0.24f);
+
+        GUI.DrawTexture(
+            panelRect,
+            Texture2D.whiteTexture,
+            ScaleMode.StretchToFill);
+
+        GUI.color = previousColor;
+
+        // The wooden frame is intentionally taller than the text block.
+        // Both lines sit lower inside the plate and are closer together.
+        float topPadding =
+            24f * scale;
+
+        float titleHeight =
+            42f * scale;
+
+        float lineGap =
+            -6f * scale;
+
+        float valueHeight =
+            58f * scale;
+
+        float textBlockHeight =
+            titleHeight +
+            lineGap +
+            valueHeight;
+
+        float availableHeight =
+            Mathf.Max(
+                1f,
+                rect.height -
+                topPadding);
+
+        float textStartY =
+            rect.y +
+            topPadding +
+            Mathf.Max(
+                0f,
+                (availableHeight -
+                 textBlockHeight) *
+                0.35f);
 
         GUI.Label(
-            new Rect(rect.x, rect.y, rect.width, titleHeight),
+            new Rect(
+                rect.x,
+                textStartY,
+                rect.width,
+                titleHeight),
             title,
             titleStyle);
 
         GUI.Label(
             new Rect(
                 rect.x,
-                rect.y + titleHeight,
+                textStartY +
+                titleHeight +
+                lineGap,
                 rect.width,
-                rect.height - titleHeight),
+                valueHeight),
             value,
             valueStyle);
     }
 
     private void DrawStatus(MineGameManager game, Rect rect)
     {
-        GUI.DrawTexture(rect, statusTexture, ScaleMode.StretchToFill);
+        GUI.DrawTexture(
+            rect,
+            woodPanelTexture != null
+                ? woodPanelTexture
+                : statusTexture,
+            ScaleMode.StretchToFill);
+
+        Color previousColor = GUI.color;
+
+        GUI.color =
+            new Color(0f, 0f, 0f, 0.30f);
+
+        GUI.DrawTexture(
+            rect,
+            Texture2D.whiteTexture,
+            ScaleMode.StretchToFill);
+
+        GUI.color = previousColor;
 
         GUI.Label(
             new Rect(
@@ -294,6 +387,52 @@ public sealed class MineGameHud : MonoBehaviour
             bossStyle);
 
         GUI.color = previousColor;
+    }
+
+
+    private void DrawSidePosts(Rect boardRect)
+    {
+        if (woodenPostTexture == null)
+            return;
+
+        // Die Pfosten gehen über die komplette Höhe:
+        // von ganz oben bis ganz unten.
+        float postWidth =
+            Mathf.Clamp(
+                68f * scale,
+                48f,
+                96f);
+
+        Rect leftPostRect =
+            new Rect(
+                0f,
+                0f,
+                postWidth,
+                Screen.height);
+
+        Rect rightPostRect =
+            new Rect(
+                Screen.width - postWidth,
+                0f,
+                postWidth,
+                Screen.height);
+
+        GUI.DrawTexture(
+            leftPostRect,
+            woodenPostTexture,
+            ScaleMode.StretchToFill,
+            true);
+
+        // Rechte Seite sauber gespiegelt.
+        GUI.DrawTextureWithTexCoords(
+            rightPostRect,
+            woodenPostTexture,
+            new Rect(
+                1f,
+                0f,
+                -1f,
+                1f),
+            true);
     }
 
     private void DrawStateOverlay(MineGameManager game, Rect boardRect)
@@ -414,17 +553,35 @@ public sealed class MineGameHud : MonoBehaviour
             StatusRect = statusRect;
         }
 
-        public static HudLayout Create(float uiScale,bool showHud,bool showStatusbar)
+        public static HudLayout Create(float uiScale)
         {
-            float width=Mathf.Max(1f,Screen.width);
-            float hh=showHud?HeaderHeight:0f;
-            float sh=showStatusbar?StatusHeight:0f;
-            float top=TopMargin+hh+(showHud?LevelGap:0f);
-            float bottom=Screen.height-sh-BottomMargin-(showStatusbar?LevelGap:0f);
-            Rect header=new Rect(0f,TopMargin,width,hh);
-            Rect board=new Rect(0f,top,width,Mathf.Max(1f,bottom-top));
-            Rect status=new Rect(0f,Screen.height-sh-BottomMargin,width,sh);
-            return new HudLayout(header,board,status);
+            float width = Mathf.Max(1f, Screen.width);
+
+            // Die Höhen bleiben identisch zu den Konstanten, weil der
+            // MineGameManager genau diesen Platz für die Kamera reserviert.
+            Rect header = new Rect(
+                0f,
+                TopMargin,
+                width,
+                HeaderHeight);
+
+            float boardTop = TopMargin + HeaderHeight + LevelGap;
+            float boardBottom =
+                Screen.height - StatusHeight - BottomMargin - LevelGap;
+
+            Rect board = new Rect(
+                0f,
+                boardTop,
+                width,
+                Mathf.Max(1f, boardBottom - boardTop));
+
+            Rect status = new Rect(
+                0f,
+                Screen.height - StatusHeight - BottomMargin,
+                width,
+                StatusHeight);
+
+            return new HudLayout(header, board, status);
         }
     }
 }
