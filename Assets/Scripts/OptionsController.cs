@@ -19,6 +19,7 @@ public sealed class OptionsController : MonoBehaviour
     [SerializeField] private Button buttonVideo;
     [SerializeField] private Button buttonKeybindings;
     [SerializeField] private Button buttonReturn;
+    [SerializeField] private Button buttonQuit;
     [SerializeField] private CanvasRenderer panelGame;
     [SerializeField] private CanvasRenderer panelControls;
     [SerializeField] private CanvasRenderer panelVideo;
@@ -32,7 +33,6 @@ public sealed class OptionsController : MonoBehaviour
     [Header("Display")]
     [SerializeField] private Button fullscreenToggle;
     [SerializeField] private TMP_Dropdown resolutionDropdown;
-    [SerializeField] private Button backButton;
 
     [Header("Scene")]
     [SerializeField] private string menuSceneName = "Menu";
@@ -50,12 +50,19 @@ public sealed class OptionsController : MonoBehaviour
         buttonControls.onClick.AddListener(() => ShowPanel(panelControls));
         buttonVideo.onClick.AddListener(() => ShowPanel(panelVideo));
         buttonKeybindings.onClick.AddListener(() => ShowPanel(panelKeybindings));
-        buttonReturn.onClick.AddListener(() => SceneManager.LoadScene(settings.LastSceneIndex));
+        buttonReturn.onClick.AddListener(() => OnSaveAndExit(settings));
+        buttonQuit.onClick.AddListener(() => SceneManager.LoadScene("Menu"));
 
         musicVolumeSlider.onValueChanged.AddListener(SetMusicVolume);
         sfxVolumeSlider.onValueChanged.AddListener(SetSfxVolume);
         fullscreenToggle.onClick.AddListener(SetFullscreen);
         resolutionDropdown.onValueChanged.AddListener(SetResolution);
+    }
+
+    private void OnSaveAndExit(GameSettings settings)
+    {
+        settings.Save();
+        SceneManager.LoadScene(settings.LastSceneIndex);
     }
 
     private void ShowPanel(CanvasRenderer newActivePanel)

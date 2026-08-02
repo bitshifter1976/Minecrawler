@@ -842,61 +842,186 @@ public sealed class MineGameHud : MonoBehaviour
         }
     }
 
-    private void DrawStateOverlay(MineGameManager game, Rect boardRect)
+    private void DrawStateOverlay(
+        MineGameManager game,
+        Rect boardRect)
     {
-        string text = GetOverlayText(game);
+        string text =
+            GetOverlayText(game);
+
         if (string.IsNullOrEmpty(text))
             return;
 
-        float margin = 20f * scale;
-        float padding = 16f * scale;
+        float horizontalMargin =
+            Mathf.Max(
+                24f * scale,
+                boardRect.width * 0.08f);
 
-        float maximumWidth = Mathf.Min(
-            820f * scale,
-            Mathf.Max(1f, boardRect.width - margin * 2f));
+        float maximumAvailableWidth =
+            Mathf.Max(
+                1f,
+                boardRect.width -
+                horizontalMargin * 2f);
 
-        float textWidth = Mathf.Max(1f, maximumWidth - padding * 2f);
-        float contentHeight = overlayStyle.CalcHeight(new GUIContent(text), textWidth);
+        float targetWidth =
+            boardRect.width * 0.42f;
 
-        float boxHeight = Mathf.Min(
-            contentHeight + padding * 2f,
-            Mathf.Max(1f, boardRect.height - margin * 2f));
+        float boxWidth =
+            Mathf.Clamp(
+                targetWidth,
+                520f * scale,
+                Mathf.Min(
+                    900f * scale,
+                    maximumAvailableWidth));
 
-        Rect boxRect = new Rect(
-            boardRect.x + (boardRect.width - maximumWidth) * 0.5f,
-            boardRect.y + (boardRect.height - boxHeight) * 0.5f,
-            maximumWidth,
-            boxHeight);
+        float horizontalPadding =
+            Mathf.Clamp(
+                boxWidth * 0.055f,
+                18f * scale,
+                42f * scale);
 
-        GUI.Box(boxRect, GUIContent.none, overlayBoxStyle);
+        float verticalPadding =
+            Mathf.Clamp(
+                boardRect.height * 0.025f,
+                14f * scale,
+                30f * scale);
 
-        Rect contentRect = new Rect(
-                boxRect.x + padding,
-                boxRect.y + padding,
-                Mathf.Max(1f, boxRect.width - padding * 2f),
-                Mathf.Max(1f, boxRect.height - padding * 2f));
+        float lineSpacing =
+            Mathf.Clamp(
+                4f * scale,
+                3f,
+                10f);
 
-        string[] lines = text.Split('\n');
+        float emptyLineSpacing =
+            Mathf.Clamp(
+                10f * scale,
+                7f,
+                20f);
 
-        float y = contentRect.y;
+        float contentWidth =
+            Mathf.Max(
+                1f,
+                boxWidth -
+                horizontalPadding * 2f);
 
-        for(int i=0;i<lines.Length;i++)
+        string[] lines =
+            text.Split(' ');
+
+        float contentHeight = 0f;
+
+        for (int index = 0;
+             index < lines.Length;
+             index++)
         {
-            if(string.IsNullOrWhiteSpace(lines[i]))
+            string line =
+                lines[index];
+
+            if (string.IsNullOrWhiteSpace(line))
             {
-                y += 12f * scale;
+                contentHeight +=
+                    emptyLineSpacing;
+
                 continue;
             }
 
-            GUIStyle style = (i==0) ? overlayTitleStyle : overlayInfoStyle;
-            float h = style.CalcHeight(new GUIContent(lines[i]), contentRect.width);
+            GUIStyle style =
+                index == 0
+                    ? overlayTitleStyle
+                    : overlayInfoStyle;
+
+            contentHeight +=
+                style.CalcHeight(
+                    new GUIContent(line),
+                    contentWidth);
+
+            if (index < lines.Length - 1)
+            {
+                contentHeight +=
+                    lineSpacing;
+            }
+        }
+
+        float boxHeight =
+            contentHeight +
+            verticalPadding * 2f;
+
+        float maximumBoxHeight =
+            Mathf.Max(
+                1f,
+                boardRect.height * 0.58f);
+
+        boxHeight =
+            Mathf.Min(
+                boxHeight,
+                maximumBoxHeight);
+
+        Rect boxRect =
+            new Rect(
+                boardRect.x +
+                (boardRect.width - boxWidth) * 0.5f,
+                boardRect.y +
+                (boardRect.height - boxHeight) * 0.5f,
+                boxWidth,
+                boxHeight);
+
+        GUI.Box(
+            boxRect,
+            GUIContent.none,
+            overlayBoxStyle);
+
+        Rect contentRect =
+            new Rect(
+                boxRect.x +
+                horizontalPadding,
+                boxRect.y +
+                verticalPadding,
+                Mathf.Max(
+                    1f,
+                    boxRect.width -
+                    horizontalPadding * 2f),
+                Mathf.Max(
+                    1f,
+                    boxRect.height -
+                    verticalPadding * 2f));
+
+        float y =
+            contentRect.y;
+
+        for (int index = 0;
+             index < lines.Length;
+             index++)
+        {
+            string line =
+                lines[index];
+
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                y += emptyLineSpacing;
+                continue;
+            }
+
+            GUIStyle style =
+                index == 0
+                    ? overlayTitleStyle
+                    : overlayInfoStyle;
+
+            float lineHeight =
+                style.CalcHeight(
+                    new GUIContent(line),
+                    contentRect.width);
 
             GUI.Label(
-                new Rect(contentRect.x,y,contentRect.width,h),
-                lines[i],
+                new Rect(
+                    contentRect.x,
+                    y,
+                    contentRect.width,
+                    lineHeight),
+                line,
                 style);
 
-            y += h + 4f * scale;
+            y +=
+                lineHeight +
+                lineSpacing;
         }
     }
 
