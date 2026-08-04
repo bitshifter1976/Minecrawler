@@ -93,7 +93,7 @@ public sealed class LevelBossSpriteAnimator : MonoBehaviour
     {
         Texture2D texture =
             Resources.Load<Texture2D>(
-                "Art/LevelBossWalk");
+                "Art/Bosses/LevelBossWalk");
 
         if (texture == null)
         {

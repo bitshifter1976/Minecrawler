@@ -62,7 +62,9 @@ public sealed class LevelBoss : GridActor
     public int HitPoints => hitPoints;
     public int MaximumHitPoints => maximumHitPoints;
     public int BossTier => bossTier;
-    public bool IsDestroyed => false;
+    private float movementBlockedUntil = 0f;
+
+    public bool IsDestroyed => hitPoints <= 0;
     public BossAttackPattern AttackPattern => attackPattern;
     public string BossName => "Mine Guardian";
 
@@ -156,6 +158,12 @@ public sealed class LevelBoss : GridActor
         transform.localScale =
             Vector3.one * bossScale;
 
+    }
+
+    // füge optional eine Stun-Methode hinzu, damit movementBlockedUntil genutzt werden kann:
+    public void StunForSeconds(float seconds)
+    {
+        movementBlockedUntil = Time.time + Mathf.Max(0f, seconds);
     }
 
     private void Update()
@@ -617,9 +625,10 @@ public sealed class LevelBoss : GridActor
         MinerController miner)
     {
         if (state != BossState.Waiting)
-        {
             return;
-        }
+
+        if (Time.time < movementBlockedUntil)
+            return;
 
         moveTimer -= Time.deltaTime;
 

@@ -12,6 +12,8 @@ using Debug = UnityEngine.Debug;
 public sealed class MineGameManager : MonoBehaviour
 {
     public static readonly string Version = "v0.5";
+    // if set higher than 0, the game will start at that level instead of the last saved level.
+    public static readonly int StartLevelIndex = 9;
 
     private IDisposable startInputSubscription;
     private const int LevelCount = 100;
@@ -183,15 +185,19 @@ public sealed class MineGameManager : MonoBehaviour
             keySprite = fallbackSprite;
         }
 
-        var bossSprite = Resources.Load<Sprite>("Art/Boss");
+        var bossSprite = Resources.Load<Sprite>("Art/Bosses/LevelBossWalk");
         if (bossSprite == null)
         {
             Debug.LogWarning("No boss sprite assigned. Using the fallback square sprite.");
             bossSprite = fallbackSprite;
         }
 
-        var bossProjectileSprite =
-            Resources.Load<Sprite>("Art/BossProjectile");
+        var bossProjectileSprite = Resources.Load<Sprite>("Art/BossFx/BossProjectile");
+        if (bossProjectileSprite == null)
+        {
+            Debug.LogWarning("No boss projectile sprite assigned. Using the fallback square sprite.");
+            bossProjectileSprite = fallbackSprite;
+        }
 
         board = new MineBoard(
             transform,
@@ -214,9 +220,8 @@ public sealed class MineGameManager : MonoBehaviour
             playTimeTracker.TotalPlayTime = settings.Playtime;
             moves = settings.Moves;
         }
-        currentLevelIndex = settings.CurrentLevel - 1;
+        currentLevelIndex = StartLevelIndex > 0 ? StartLevelIndex : settings.CurrentLevel - 1;
         currentLevelIndex = Mathf.Clamp(currentLevelIndex, 0, LevelCount - 1);
-        currentLevelIndex = 25;
 
         LoadLevel(currentLevelIndex);
         SetupCamera();
