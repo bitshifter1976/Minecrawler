@@ -1333,6 +1333,10 @@ MonoBehaviour:
   panelVideo: {fileID: 1730980571}
   panelKeybindings: {fileID: 66540202}
   audioMixer: {fileID: 24100000, guid: 0045d2958ef4bf54aaa812f81775c56a, type: 2}
+  audioSource: {fileID: 1720530961}
+  audioSourceFx: {fileID: 2063769248}
+  selectClip: {fileID: 0}
+  startClip: {fileID: 0}
   musicVolumeSlider: {fileID: 216889988}
   sfxVolumeSlider: {fileID: 1554345880}
   fullscreenToggle: {fileID: 412573658}
@@ -4406,7 +4410,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: WHEN YOU RETURN, SETTINGS WILL BE SAVED
+  m_text: When you quit the game, Settings will not be saved!
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: be5c6513300a946448aaad8bacfc0db8, type: 2}
   m_sharedMaterial: {fileID: -3141966938508264185, guid: be5c6513300a946448aaad8bacfc0db8, type: 2}
@@ -8837,8 +8841,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 313.5, y: -102.23999}
-  m_SizeDelta: {x: 586, y: 203}
+  m_AnchoredPosition: {x: 293, y: -75.515015}
+  m_SizeDelta: {x: 586, y: 151.03}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1075008692
 MonoBehaviour:
@@ -8862,8 +8866,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: OPTIONS
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 075928e112f37304cb369b5ecd2cb936, type: 2}
-  m_sharedMaterial: {fileID: 695183906564977479, guid: 075928e112f37304cb369b5ecd2cb936, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: be5c6513300a946448aaad8bacfc0db8, type: 2}
+  m_sharedMaterial: {fileID: -3141966938508264185, guid: be5c6513300a946448aaad8bacfc0db8, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -8887,8 +8891,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 1002.7
-  m_fontSizeBase: 1002.7
+  m_fontSize: 1302
+  m_fontSizeBase: 1302
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -8926,7 +8930,7 @@ MonoBehaviour:
   m_VertexBufferAutoSizeReduction: 1
   m_useMaxVisibleDescender: 1
   m_pageToDisplay: 1
-  m_margin: {x: 0, y: 0, z: -79.013245, w: 0}
+  m_margin: {x: 0, y: 0, z: -155.05048, w: -34.649773}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
   _SortingLayer: 0
@@ -8960,7 +8964,7 @@ MeshRenderer:
   m_RenderingLayerMask: 4294967295
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 695183906564977479, guid: 075928e112f37304cb369b5ecd2cb936, type: 2}
+  - {fileID: -3141966938508264185, guid: be5c6513300a946448aaad8bacfc0db8, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

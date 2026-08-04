@@ -7,7 +7,7 @@ using UnityEngine;
 public sealed class BossProjectile : MonoBehaviour
 {
     [SerializeField] private float maximumLifetime = 9f;
-    [SerializeField] private float minerHitRadius = 0.31f;
+    [SerializeField] private float minerHitRadius = 0.22f;
 
     private Vector2 direction;
     private float speed;
@@ -61,7 +61,7 @@ public sealed class BossProjectile : MonoBehaviour
         renderer.sortingOrder = 8;
 
         transform.localScale =
-            Vector3.one * 0.55f;
+            Vector3.one * 0.34f;
 
         initialized = true;
         RotateSprite();

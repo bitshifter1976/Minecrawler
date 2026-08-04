@@ -48,7 +48,7 @@ public class MenuController : MonoBehaviour
         if (musicClip != null)
         {
             audioSource.clip = musicClip;
-            audioSource.volume = 0.5f;
+            audioSource.volume = 0.25f;
             audioSource.loop = true;
             audioSource.Play();
         }
@@ -86,6 +86,7 @@ public class MenuController : MonoBehaviour
             AddHoverSelection(button);
         }
     }
+
     private void ConfigureNavigation()
     {
         SetNavigation(
@@ -144,6 +145,11 @@ public class MenuController : MonoBehaviour
         });
 
         trigger.triggers.Add(entry);
+    }
+
+    public void OnClickMusicArtist()
+    {
+        Application.OpenURL("https://www.redcapclub.at");
     }
 
     private void Update()

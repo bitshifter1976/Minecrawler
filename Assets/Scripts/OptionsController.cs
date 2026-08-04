@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Audio;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -27,6 +28,10 @@ public sealed class OptionsController : MonoBehaviour
 
     [Header("Audio")]
     [SerializeField] private AudioMixer audioMixer;
+    [SerializeField] private AudioSource audioSource;
+    [SerializeField] private AudioSource audioSourceFx;
+    [SerializeField] private AudioClip selectClip;
+    [SerializeField] private AudioClip startClip;
     [SerializeField] private Slider musicVolumeSlider;
     [SerializeField] private Slider sfxVolumeSlider;
 
@@ -39,34 +44,147 @@ public sealed class OptionsController : MonoBehaviour
 
     private Resolution[] availableResolutions;
     private CanvasRenderer activePanel;
+    private GameObject lastSelectedObject;
 
     private void Start()
     {
         SetupResolutions();
         var settings = LoadSettings();
+        audioSource.clip = Resources.Load<AudioClip>("Audio/ambience");
+        audioSource.loop = true;
+        audioSource.Play();
 
         activePanel = panelGame;
+        ConfigureNavigation();
         buttonGame.onClick.AddListener(() => ShowPanel(panelGame));
         buttonControls.onClick.AddListener(() => ShowPanel(panelControls));
         buttonVideo.onClick.AddListener(() => ShowPanel(panelVideo));
         buttonKeybindings.onClick.AddListener(() => ShowPanel(panelKeybindings));
         buttonReturn.onClick.AddListener(() => OnSaveAndExit(settings));
-        buttonQuit.onClick.AddListener(() => SceneManager.LoadScene("Menu"));
+        buttonQuit.onClick.AddListener(() =>
+        {
+            PlayStartSound();
+            SceneManager.LoadScene("Menu");
+        });
 
         musicVolumeSlider.onValueChanged.AddListener(SetMusicVolume);
         sfxVolumeSlider.onValueChanged.AddListener(SetSfxVolume);
         fullscreenToggle.onClick.AddListener(SetFullscreen);
         resolutionDropdown.onValueChanged.AddListener(SetResolution);
+
+        AddHoverSelection(buttonGame);
+        AddHoverSelection(buttonControls);
+        AddHoverSelection(buttonVideo);
+        AddHoverSelection(buttonKeybindings);
+        AddHoverSelection(buttonReturn);
+        AddHoverSelection(buttonQuit);
+
+        if (EventSystem.current != null)
+        {
+            EventSystem.current.SetSelectedGameObject(null);
+            EventSystem.current.SetSelectedGameObject(buttonGame.gameObject);
+            lastSelectedObject = buttonGame.gameObject;
+        }
+    }
+
+
+    private void Update()
+    {
+        if (EventSystem.current == null)
+            return;
+
+        GameObject selected =
+            EventSystem.current.currentSelectedGameObject;
+
+        if (selected == null ||
+            selected == lastSelectedObject)
+        {
+            return;
+        }
+
+        PlaySelectSound();
+        lastSelectedObject = selected;
+    }
+
+    private void AddHoverSelection(Button button)
+    {
+        if (button == null)
+            return;
+
+        EventTrigger trigger =
+            button.GetComponent<EventTrigger>();
+
+        if (trigger == null)
+            trigger = button.gameObject.AddComponent<EventTrigger>();
+
+        EventTrigger.Entry entry =
+            new EventTrigger.Entry
+            {
+                eventID = EventTriggerType.PointerEnter
+            };
+
+        entry.callback.AddListener(_ =>
+        {
+            if (EventSystem.current != null)
+                EventSystem.current.SetSelectedGameObject(button.gameObject);
+        });
+
+        trigger.triggers.Add(entry);
+    }
+
+    private void ConfigureNavigation()
+    {
+        SetNavigation(buttonGame, buttonQuit, buttonControls);
+        SetNavigation(buttonControls, buttonGame, buttonVideo);
+        SetNavigation(buttonVideo, buttonControls, buttonKeybindings);
+        SetNavigation(buttonKeybindings, buttonVideo, buttonReturn);
+        SetNavigation(buttonReturn, buttonKeybindings, buttonQuit);
+        SetNavigation(buttonQuit, buttonReturn, buttonGame);
+    }
+
+    private static void SetNavigation(
+        Button button,
+        Selectable up,
+        Selectable down)
+    {
+        if (button == null)
+            return;
+
+        Navigation navigation = button.navigation;
+        navigation.mode = Navigation.Mode.Explicit;
+        navigation.selectOnUp = up;
+        navigation.selectOnDown = down;
+        button.navigation = navigation;
+    }
+
+    private void PlaySelectSound()
+    {
+        if (audioSourceFx != null &&
+            selectClip != null)
+        {
+            audioSourceFx.PlayOneShot(selectClip);
+        }
+    }
+
+    private void PlayStartSound()
+    {
+        if (audioSourceFx != null &&
+            startClip != null)
+        {
+            audioSourceFx.PlayOneShot(startClip);
+        }
     }
 
     private void OnSaveAndExit(GameSettings settings)
     {
+        PlayStartSound();
         settings.Save();
         SceneManager.LoadScene(settings.LastSceneIndex);
     }
 
     private void ShowPanel(CanvasRenderer newActivePanel)
     {
+        PlayStartSound();
         activePanel.gameObject.SetActive(false);
         newActivePanel.gameObject.SetActive(true);
         activePanel = newActivePanel;

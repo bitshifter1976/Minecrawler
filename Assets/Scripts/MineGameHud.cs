@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public sealed class MineGameHud : MonoBehaviour
 {
@@ -20,6 +21,8 @@ public sealed class MineGameHud : MonoBehaviour
     private GUIStyle statusStyle;
     private GUIStyle overlayStyle;
     private GUIStyle overlayBoxStyle;
+    private GUIStyle hudButtonStyle;
+    private GUIStyle iconButtonStyle;
     private GUIStyle overlayTitleStyle;
     private GUIStyle overlayInfoStyle;
 
@@ -30,9 +33,15 @@ public sealed class MineGameHud : MonoBehaviour
     private Texture2D statusTexture;
     private Texture2D woodPanelTexture;
     private Texture2D woodenPostTexture;
+    private Texture2D hudButtonNormalTexture;
+    private Texture2D hudButtonHoverTexture;
+    private Texture2D hudButtonActiveTexture;
+    private Texture2D pauseIconTexture;
+    private Texture2D gearIconTexture;
 
     private float scale = 1f;
     private float lastStyleScale = -1f;
+    private Rect timeBadgeRect;
 
     private void OnGUI()
     {
@@ -71,6 +80,7 @@ public sealed class MineGameHud : MonoBehaviour
         DrawSidePosts(game, layout.BoardRect);
         DrawHeader(game, layout.HeaderRect);
         DrawStatus(game, layout.StatusRect);
+        DrawHudButtons(game, layout.StatusRect);
         DrawStateOverlay(game, layout.BoardRect);
     }
 
@@ -113,6 +123,40 @@ public sealed class MineGameHud : MonoBehaviour
             statusTexture = CreateTexture(
                 new Color(0.10f, 0.08f, 0.055f, 0.98f),
                 "MineGameHud Status");
+
+            hudButtonNormalTexture =
+                CreateMetalButtonTexture(
+                    96,
+                    new Color(0.10f, 0.065f, 0.025f, 1f),
+                    new Color(0.49f, 0.29f, 0.08f, 1f),
+                    new Color(0.95f, 0.65f, 0.20f, 1f),
+                    "HUD Button Normal");
+
+            hudButtonHoverTexture =
+                CreateMetalButtonTexture(
+                    96,
+                    new Color(0.16f, 0.09f, 0.025f, 1f),
+                    new Color(0.72f, 0.42f, 0.09f, 1f),
+                    new Color(1f, 0.83f, 0.38f, 1f),
+                    "HUD Button Hover");
+
+            hudButtonActiveTexture =
+                CreateMetalButtonTexture(
+                    96,
+                    new Color(0.055f, 0.035f, 0.018f, 1f),
+                    new Color(0.35f, 0.19f, 0.045f, 1f),
+                    new Color(0.77f, 0.48f, 0.13f, 1f),
+                    "HUD Button Active");
+
+            pauseIconTexture =
+                CreatePauseIconTexture(
+                    64,
+                    new Color(1f, 0.84f, 0.38f, 1f));
+
+            gearIconTexture =
+                CreateGearIconTexture(
+                    64,
+                    new Color(1f, 0.84f, 0.38f, 1f));
         }
 
         if (Mathf.Approximately(lastStyleScale, scale) &&
@@ -120,7 +164,9 @@ public sealed class MineGameHud : MonoBehaviour
             valueStyle != null &&
             statusStyle != null &&
             overlayStyle != null &&
-            overlayBoxStyle != null)
+            overlayBoxStyle != null &&
+            hudButtonStyle != null &&
+            iconButtonStyle != null)
         {
             return;
         }
@@ -170,7 +216,8 @@ public sealed class MineGameHud : MonoBehaviour
             fontSize = ScaleFont(46),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
-            wordWrap = true
+            wordWrap = false,
+            clipping = TextClipping.Overflow
         };
         overlayTitleStyle.normal.textColor = Color.white;
 
@@ -179,7 +226,8 @@ public sealed class MineGameHud : MonoBehaviour
             fontSize = ScaleFont(22),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
-            wordWrap = true
+            wordWrap = false,
+            clipping = TextClipping.Overflow
         };
         overlayInfoStyle.normal.textColor = new Color(0.94f,0.92f,0.84f);
 
@@ -187,6 +235,32 @@ public sealed class MineGameHud : MonoBehaviour
 
         overlayBoxStyle = new GUIStyle(GUI.skin.box);
         overlayBoxStyle.normal.background = panelTexture;
+
+        hudButtonStyle = new GUIStyle(GUI.skin.button);
+
+        iconButtonStyle = new GUIStyle(GUI.skin.button)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            padding = new RectOffset(0, 0, 0, 0),
+            margin = new RectOffset(0, 0, 0, 0),
+            border = new RectOffset(
+                ScaleFont(14),
+                ScaleFont(14),
+                ScaleFont(14),
+                ScaleFont(14))
+        };
+
+        iconButtonStyle.normal.background =
+            hudButtonNormalTexture;
+
+        iconButtonStyle.hover.background =
+            hudButtonHoverTexture;
+
+        iconButtonStyle.active.background =
+            hudButtonActiveTexture;
+
+        iconButtonStyle.focused.background =
+            hudButtonHoverTexture;
     }
 
     private int ScaleFont(int baseSize)
@@ -228,10 +302,21 @@ public sealed class MineGameHud : MonoBehaviour
 
         for (int i = 0; i < badgeCount; i++)
         {
+            Rect badgeRect =
+                new Rect(
+                    x,
+                    rect.y,
+                    badgeWidth,
+                    rect.height);
+
+            if (i == badgeCount - 1)
+                timeBadgeRect = badgeRect;
+
             DrawBadge(
-                new Rect(x, rect.y, badgeWidth, rect.height),
+                badgeRect,
                 titles[i],
-                values[i]);
+                values[i],
+                1f);
 
             x += badgeWidth + gap;
         }
@@ -378,7 +463,11 @@ public sealed class MineGameHud : MonoBehaviour
         GUI.color = previousColor;
     }
 
-    private void DrawBadge(Rect rect, string title, string value)
+    private void DrawBadge(
+        Rect rect,
+        string title,
+        string value,
+        float contentWidthFactor)
     {
         Rect panelRect =
             new Rect(
@@ -440,25 +529,205 @@ public sealed class MineGameHud : MonoBehaviour
                  textBlockHeight) *
                 0.35f);
 
-        DrawBurnedHeading(
+        Rect contentRect =
             new Rect(
                 rect.x,
+                rect.y,
+                rect.width *
+                Mathf.Clamp01(
+                    contentWidthFactor),
+                rect.height);
+
+        DrawBurnedHeading(
+            new Rect(
+                contentRect.x,
                 textStartY,
-                rect.width,
+                contentRect.width,
                 titleHeight),
             title,
             titleStyle);
 
         DrawBrassValue(
             new Rect(
-                rect.x,
+                contentRect.x,
                 textStartY +
                 titleHeight +
                 lineGap,
-                rect.width,
+                contentRect.width,
                 valueHeight),
             value,
             valueStyle);
+    }
+
+
+    private void DrawHudButtons(
+        MineGameManager game,
+        Rect statusRect)
+    {
+        if (iconButtonStyle == null)
+            return;
+
+        float buttonSize =
+            Mathf.Clamp(
+                statusRect.height * 0.88f,
+                68f,
+                84f);
+
+        float gap =
+            Mathf.Clamp(
+                14f * scale,
+                10f,
+                22f);
+
+        float rightPadding =
+            Mathf.Clamp(
+                18f * scale,
+                12f,
+                30f);
+
+        float y =
+            statusRect.y +
+            (statusRect.height -
+             buttonSize) *
+            0.5f;
+
+        Rect optionsRect =
+            new Rect(
+                statusRect.xMax -
+                rightPadding -
+                buttonSize,
+                y,
+                buttonSize,
+                buttonSize);
+
+        Rect pauseRect =
+            new Rect(
+                optionsRect.x -
+                gap -
+                buttonSize,
+                y,
+                buttonSize,
+                buttonSize);
+
+        bool pauseEnabled =
+            game.State == GameState.Playing ||
+            game.State == GameState.Paused;
+
+        bool previousEnabled =
+            GUI.enabled;
+
+        GUI.enabled =
+            pauseEnabled;
+
+        if (GUI.Button(
+                pauseRect,
+                GUIContent.none,
+                iconButtonStyle))
+        {
+            game.TogglePause();
+        }
+
+        DrawButtonIcon(
+            pauseRect,
+            pauseIconTexture,
+            pauseEnabled
+                ? Color.white
+                : new Color(
+                    0.42f,
+                    0.37f,
+                    0.28f,
+                    0.72f));
+
+        GUI.enabled =
+            previousEnabled;
+
+        if (GUI.Button(
+                optionsRect,
+                GUIContent.none,
+                iconButtonStyle))
+        {
+            SceneManager.LoadScene(2);
+        }
+
+        DrawButtonIcon(
+            optionsRect,
+            gearIconTexture,
+            Color.white);
+
+        if (game.State == GameState.Paused)
+        {
+            DrawPausedIndicator(
+                pauseRect);
+        }
+    }
+
+    private void DrawButtonIcon(
+        Rect buttonRect,
+        Texture2D icon,
+        Color tint)
+    {
+        if (icon == null)
+            return;
+
+        float inset =
+            buttonRect.width * 0.13f;
+
+        Rect iconRect =
+            new Rect(
+                buttonRect.x + inset,
+                buttonRect.y + inset,
+                buttonRect.width - inset * 2f,
+                buttonRect.height - inset * 2f);
+
+        Color previousColor =
+            GUI.color;
+
+        GUI.color =
+            tint;
+
+        GUI.DrawTexture(
+            iconRect,
+            icon,
+            ScaleMode.ScaleToFit,
+            true);
+
+        GUI.color =
+            previousColor;
+    }
+
+    private void DrawPausedIndicator(
+        Rect pauseRect)
+    {
+        float size =
+            Mathf.Max(
+                5f,
+                pauseRect.width * 0.13f);
+
+        Rect indicator =
+            new Rect(
+                pauseRect.xMax -
+                size * 0.85f,
+                pauseRect.y +
+                size * 0.05f,
+                size,
+                size);
+
+        Color previousColor =
+            GUI.color;
+
+        GUI.color =
+            new Color(
+                0.30f,
+                1f,
+                0.38f,
+                1f);
+
+        GUI.DrawTexture(
+            indicator,
+            Texture2D.whiteTexture);
+
+        GUI.color =
+            previousColor;
     }
 
     private void DrawStatus(MineGameManager game, Rect rect)
@@ -482,12 +751,24 @@ public sealed class MineGameHud : MonoBehaviour
 
         GUI.color = previousColor;
 
+        float reservedButtonWidth =
+            Mathf.Clamp(
+                rect.height * 2.18f,
+                180f,
+                230f);
+
         GUI.Label(
             new Rect(
-                rect.x,
+                rect.x + 18f * scale,
                 rect.y,
-                Mathf.Max(1f, rect.width),
-                Mathf.Max(1f, rect.height)),
+                Mathf.Max(
+                    1f,
+                    rect.width -
+                    reservedButtonWidth -
+                    36f * scale),
+                Mathf.Max(
+                    1f,
+                    rect.height)),
             game.Message,
             statusStyle);
     }
@@ -846,121 +1127,79 @@ public sealed class MineGameHud : MonoBehaviour
         MineGameManager game,
         Rect boardRect)
     {
-        string text =
-            GetOverlayText(game);
+        GetOverlayContent(
+            game,
+            out string title,
+            out string subtitle,
+            out string detail);
 
-        if (string.IsNullOrEmpty(text))
+        if (string.IsNullOrEmpty(title))
             return;
-
-        float horizontalMargin =
-            Mathf.Max(
-                24f * scale,
-                boardRect.width * 0.08f);
-
-        float maximumAvailableWidth =
-            Mathf.Max(
-                1f,
-                boardRect.width -
-                horizontalMargin * 2f);
-
-        float targetWidth =
-            boardRect.width * 0.42f;
 
         float boxWidth =
             Mathf.Clamp(
-                targetWidth,
-                520f * scale,
-                Mathf.Min(
-                    900f * scale,
-                    maximumAvailableWidth));
+                boardRect.width * 0.46f,
+                560f * scale,
+                940f * scale);
+
+        boxWidth =
+            Mathf.Min(
+                boxWidth,
+                boardRect.width -
+                64f * scale);
+
+        int bodyLines = 0;
+
+        if (!string.IsNullOrEmpty(subtitle))
+            bodyLines++;
+
+        if (!string.IsNullOrEmpty(detail))
+            bodyLines++;
 
         float horizontalPadding =
             Mathf.Clamp(
-                boxWidth * 0.055f,
-                18f * scale,
-                42f * scale);
+                46f * scale,
+                28f,
+                70f);
 
         float verticalPadding =
             Mathf.Clamp(
-                boardRect.height * 0.025f,
-                14f * scale,
-                30f * scale);
+                24f * scale,
+                18f,
+                42f);
 
-        float lineSpacing =
+        float titleHeight =
             Mathf.Clamp(
-                4f * scale,
-                3f,
-                10f);
+                72f * scale,
+                54f,
+                106f);
 
-        float emptyLineSpacing =
+        float bodyHeight =
+            Mathf.Clamp(
+                38f * scale,
+                28f,
+                56f);
+
+        float gap =
             Mathf.Clamp(
                 10f * scale,
                 7f,
-                20f);
-
-        float contentWidth =
-            Mathf.Max(
-                1f,
-                boxWidth -
-                horizontalPadding * 2f);
-
-        string[] lines =
-            text.Split(' ');
-
-        float contentHeight = 0f;
-
-        for (int index = 0;
-             index < lines.Length;
-             index++)
-        {
-            string line =
-                lines[index];
-
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                contentHeight +=
-                    emptyLineSpacing;
-
-                continue;
-            }
-
-            GUIStyle style =
-                index == 0
-                    ? overlayTitleStyle
-                    : overlayInfoStyle;
-
-            contentHeight +=
-                style.CalcHeight(
-                    new GUIContent(line),
-                    contentWidth);
-
-            if (index < lines.Length - 1)
-            {
-                contentHeight +=
-                    lineSpacing;
-            }
-        }
+                18f);
 
         float boxHeight =
-            contentHeight +
-            verticalPadding * 2f;
-
-        float maximumBoxHeight =
-            Mathf.Max(
-                1f,
-                boardRect.height * 0.58f);
-
-        boxHeight =
-            Mathf.Min(
-                boxHeight,
-                maximumBoxHeight);
+            verticalPadding * 2f +
+            titleHeight +
+            bodyLines * bodyHeight +
+            bodyLines * gap;
 
         Rect boxRect =
             new Rect(
                 boardRect.x +
-                (boardRect.width - boxWidth) * 0.5f,
+                (boardRect.width -
+                 boxWidth) * 0.5f,
                 boardRect.y +
-                (boardRect.height - boxHeight) * 0.5f,
+                (boardRect.height -
+                 boxHeight) * 0.5f,
                 boxWidth,
                 boxHeight);
 
@@ -969,89 +1208,175 @@ public sealed class MineGameHud : MonoBehaviour
             GUIContent.none,
             overlayBoxStyle);
 
-        Rect contentRect =
+        float contentWidth =
+            boxRect.width -
+            horizontalPadding * 2f;
+
+        float y =
+            boxRect.y +
+            verticalPadding;
+
+        Rect titleRect =
             new Rect(
                 boxRect.x +
                 horizontalPadding,
-                boxRect.y +
-                verticalPadding,
-                Mathf.Max(
-                    1f,
-                    boxRect.width -
-                    horizontalPadding * 2f),
-                Mathf.Max(
-                    1f,
-                    boxRect.height -
-                    verticalPadding * 2f));
+                y,
+                contentWidth,
+                titleHeight);
 
-        float y =
-            contentRect.y;
+        DrawFittedOverlayLine(
+            titleRect,
+            title,
+            overlayTitleStyle,
+            ScaleFont(46),
+            ScaleFont(28));
 
-        for (int index = 0;
-             index < lines.Length;
-             index++)
+        y =
+            titleRect.yMax +
+            gap;
+
+        if (!string.IsNullOrEmpty(subtitle))
         {
-            string line =
-                lines[index];
-
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                y += emptyLineSpacing;
-                continue;
-            }
-
-            GUIStyle style =
-                index == 0
-                    ? overlayTitleStyle
-                    : overlayInfoStyle;
-
-            float lineHeight =
-                style.CalcHeight(
-                    new GUIContent(line),
-                    contentRect.width);
-
-            GUI.Label(
+            Rect subtitleRect =
                 new Rect(
-                    contentRect.x,
+                    boxRect.x +
+                    horizontalPadding,
                     y,
-                    contentRect.width,
-                    lineHeight),
-                line,
-                style);
+                    contentWidth,
+                    bodyHeight);
 
-            y +=
-                lineHeight +
-                lineSpacing;
+            DrawFittedOverlayLine(
+                subtitleRect,
+                subtitle,
+                overlayInfoStyle,
+                ScaleFont(24),
+                ScaleFont(16));
+
+            y =
+                subtitleRect.yMax +
+                gap;
+        }
+
+        if (!string.IsNullOrEmpty(detail))
+        {
+            Rect detailRect =
+                new Rect(
+                    boxRect.x +
+                    horizontalPadding,
+                    y,
+                    contentWidth,
+                    bodyHeight);
+
+            DrawFittedOverlayLine(
+                detailRect,
+                detail,
+                overlayInfoStyle,
+                ScaleFont(22),
+                ScaleFont(15));
         }
     }
 
-    private static string GetOverlayText(MineGameManager game)
+    private static void GetOverlayContent(
+        MineGameManager game,
+        out string title,
+        out string subtitle,
+        out string detail)
     {
-        return game.State switch
+        title = null;
+        subtitle = null;
+        detail = null;
+
+        switch (game.State)
         {
-            GameState.Loading =>
-                "Loading level...",
+            case GameState.Loading:
+                title = "LOADING LEVEL...";
+                break;
 
-            GameState.LevelReady =>
-                $"LEVEL   {game.CurrentLevel}\n\nPress any key to start!",
+            case GameState.LevelReady:
+                title =
+                    $"LEVEL {game.CurrentLevel}";
 
-            GameState.Paused =>
-                "PAUSED",
+                subtitle =
+                    "PRESS ANY KEY TO START!";
+                break;
 
-            GameState.LevelCompleted =>
-                $"LEVEL   {game.CurrentLevel} COMPLETE\n\nScore: {game.Score:N0}",
+            case GameState.Paused:
+                title = "PAUSED";
+                subtitle =
+                    "PRESS RESUME TO CONTINUE";
+                break;
 
-            GameState.GameOver =>
-                $"GAME OVER\n\n{game.Message}\n\nScore: {game.Score:N0}",
+            case GameState.LevelCompleted:
+                title =
+                    $"LEVEL {game.CurrentLevel} COMPLETE";
 
-            GameState.Victory =>
-                "CONGRATULATIONS!\n\n" +
-                $"You completed all {game.TotalLevels} levels!\n\n" +
-                $"Final score: {game.Score:N0}\n\n" +
-                "Press any key to start a new game.",
+                subtitle =
+                    $"SCORE: {game.Score:N0}";
+                break;
 
-            _ => null
-        };
+            case GameState.GameOver:
+                title = "GAME OVER";
+                subtitle = game.Message;
+                detail =
+                    $"SCORE: {game.Score:N0}";
+                break;
+
+            case GameState.Victory:
+                title = "CONGRATULATIONS!";
+                subtitle =
+                    $"YOU COMPLETED ALL {game.TotalLevels} LEVELS!";
+
+                detail =
+                    $"FINAL SCORE: {game.Score:N0}";
+                break;
+        }
+    }
+
+    private static void DrawFittedOverlayLine(
+        Rect rect,
+        string text,
+        GUIStyle baseStyle,
+        int maximumFontSize,
+        int minimumFontSize)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        GUIStyle fittedStyle =
+            new GUIStyle(
+                baseStyle)
+            {
+                wordWrap = false,
+                clipping = TextClipping.Clip,
+                alignment = TextAnchor.MiddleCenter
+            };
+
+        GUIContent content =
+            new GUIContent(
+                text);
+
+        for (int fontSize =
+                 Mathf.Max(
+                     minimumFontSize,
+                     maximumFontSize);
+             fontSize >= minimumFontSize;
+             fontSize--)
+        {
+            fittedStyle.fontSize =
+                fontSize;
+
+            if (fittedStyle.CalcSize(
+                    content).x <=
+                rect.width)
+            {
+                break;
+            }
+        }
+
+        GUI.Label(
+            rect,
+            content,
+            fittedStyle);
     }
 
     private static string FormatTime(TimeSpan time)
@@ -1059,6 +1384,290 @@ public sealed class MineGameHud : MonoBehaviour
         return time.TotalHours >= 1
             ? $"{(int)time.TotalHours:00}:{time.Minutes:00}:{time.Seconds:00}"
             : $"{time.Minutes:00}:{time.Seconds:00}";
+    }
+
+    private static Texture2D CreateMetalButtonTexture(
+        int size,
+        Color centerColor,
+        Color ringColor,
+        Color highlightColor,
+        string textureName)
+    {
+        Texture2D texture =
+            new Texture2D(
+                size,
+                size,
+                TextureFormat.RGBA32,
+                false)
+            {
+                name = textureName,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags =
+                    HideFlags.HideAndDontSave
+            };
+
+        Vector2 center =
+            new Vector2(
+                (size - 1) * 0.5f,
+                (size - 1) * 0.5f);
+
+        float radius =
+            size * 0.46f;
+
+        for (int y = 0;
+             y < size;
+             y++)
+        {
+            for (int x = 0;
+                 x < size;
+                 x++)
+            {
+                Vector2 point =
+                    new Vector2(
+                        x,
+                        y);
+
+                float distance =
+                    Vector2.Distance(
+                        point,
+                        center);
+
+                if (distance > radius)
+                {
+                    texture.SetPixel(
+                        x,
+                        y,
+                        Color.clear);
+
+                    continue;
+                }
+
+                float normalized =
+                    distance /
+                    radius;
+
+                Color color =
+                    normalized > 0.77f
+                        ? ringColor
+                        : centerColor;
+
+                float topLight =
+                    Mathf.Clamp01(
+                        1f -
+                        (point.y /
+                         size));
+
+                color =
+                    Color.Lerp(
+                        color,
+                        highlightColor,
+                        topLight *
+                        (normalized > 0.66f
+                            ? 0.34f
+                            : 0.10f));
+
+                if (normalized < 0.14f)
+                {
+                    color =
+                        Color.Lerp(
+                            color,
+                            Color.black,
+                            0.18f);
+                }
+
+                texture.SetPixel(
+                    x,
+                    y,
+                    color);
+            }
+        }
+
+        texture.Apply();
+        return texture;
+    }
+
+    private static Texture2D CreatePauseIconTexture(
+        int size,
+        Color color)
+    {
+        Texture2D texture =
+            CreateTransparentTexture(
+                size,
+                "HUD Pause Icon");
+
+        int barWidth =
+            Mathf.Max(
+                3,
+                size / 7);
+
+        int barHeight =
+            Mathf.RoundToInt(
+                size * 0.58f);
+
+        int top =
+            (size -
+             barHeight) /
+            2;
+
+        int leftOne =
+            Mathf.RoundToInt(
+                size * 0.27f);
+
+        int leftTwo =
+            Mathf.RoundToInt(
+                size * 0.57f);
+
+        FillTextureRect(
+            texture,
+            leftOne,
+            top,
+            barWidth,
+            barHeight,
+            color);
+
+        FillTextureRect(
+            texture,
+            leftTwo,
+            top,
+            barWidth,
+            barHeight,
+            color);
+
+        texture.Apply();
+        return texture;
+    }
+
+    private static Texture2D CreateGearIconTexture(
+        int size,
+        Color color)
+    {
+        Texture2D texture =
+            CreateTransparentTexture(
+                size,
+                "HUD Gear Icon");
+
+        Vector2 center =
+            new Vector2(
+                (size - 1) * 0.5f,
+                (size - 1) * 0.5f);
+
+        float outerRadius =
+            size * 0.34f;
+
+        float innerRadius =
+            size * 0.15f;
+
+        for (int y = 0;
+             y < size;
+             y++)
+        {
+            for (int x = 0;
+                 x < size;
+                 x++)
+            {
+                Vector2 delta =
+                    new Vector2(
+                        x,
+                        y) -
+                    center;
+
+                float distance =
+                    delta.magnitude;
+
+                float angle =
+                    Mathf.Atan2(
+                        delta.y,
+                        delta.x);
+
+                float toothWave =
+                    Mathf.Abs(
+                        Mathf.Cos(
+                            angle * 4f));
+
+                float toothRadius =
+                    Mathf.Lerp(
+                        outerRadius * 0.82f,
+                        outerRadius,
+                        toothWave);
+
+                bool ring =
+                    distance <= toothRadius &&
+                    distance >= innerRadius;
+
+                if (ring)
+                {
+                    texture.SetPixel(
+                        x,
+                        y,
+                        color);
+                }
+            }
+        }
+
+        texture.Apply();
+        return texture;
+    }
+
+    private static Texture2D CreateTransparentTexture(
+        int size,
+        string textureName)
+    {
+        Texture2D texture =
+            new Texture2D(
+                size,
+                size,
+                TextureFormat.RGBA32,
+                false)
+            {
+                name = textureName,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags =
+                    HideFlags.HideAndDontSave
+            };
+
+        Color[] pixels =
+            new Color[
+                size *
+                size];
+
+        texture.SetPixels(
+            pixels);
+
+        return texture;
+    }
+
+    private static void FillTextureRect(
+        Texture2D texture,
+        int x,
+        int y,
+        int width,
+        int height,
+        Color color)
+    {
+        for (int py = y;
+             py < y + height;
+             py++)
+        {
+            for (int px = x;
+                 px < x + width;
+                 px++)
+            {
+                if (px < 0 ||
+                    py < 0 ||
+                    px >= texture.width ||
+                    py >= texture.height)
+                {
+                    continue;
+                }
+
+                texture.SetPixel(
+                    px,
+                    py,
+                    color);
+            }
+        }
     }
 
     private static Texture2D CreateTexture(Color color, string textureName)
@@ -1079,6 +1688,11 @@ public sealed class MineGameHud : MonoBehaviour
         DestroyTexture(panelTexture);
         DestroyTexture(badgeTexture);
         DestroyTexture(statusTexture);
+        DestroyTexture(hudButtonNormalTexture);
+        DestroyTexture(hudButtonHoverTexture);
+        DestroyTexture(hudButtonActiveTexture);
+        DestroyTexture(pauseIconTexture);
+        DestroyTexture(gearIconTexture);
     }
 
     private static void DestroyTexture(Texture2D texture)

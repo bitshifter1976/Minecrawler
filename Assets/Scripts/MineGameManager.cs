@@ -20,6 +20,8 @@ public sealed class MineGameManager : MonoBehaviour
     private Coroutine levelTransitionCoroutine;
     private AudioSource audioSource;
     private AudioSource audioSourceFx;
+    private AudioSource ambienceSource;
+    private AudioClip ambienceClip;
     private AudioListener audioListener;
     private int currentLevelIndex;
     private int score;
@@ -114,6 +116,8 @@ public sealed class MineGameManager : MonoBehaviour
         audioSource = audioSources.Length > 0 ? audioSources[0] : null;
         audioSourceFx = audioSources.Length > 1 ? audioSources[1] : null;
 
+        SetupAmbienceAudio();
+
         gameObject.AddComponent<FallingRockSpawner>();
         gameObject.AddComponent<WaterDropSpawner>();
         gameObject.AddComponent<FireFlySpawner>();
@@ -207,9 +211,45 @@ public sealed class MineGameManager : MonoBehaviour
         }
         currentLevelIndex = settings.CurrentLevel - 1;
         currentLevelIndex = Mathf.Clamp(currentLevelIndex, 0, LevelCount - 1);
+        currentLevelIndex = 9;
 
         LoadLevel(currentLevelIndex);
         SetupCamera();
+        PlayAmbience();
+    }
+
+
+    private void SetupAmbienceAudio()
+    {
+        ambienceClip = Resources.Load<AudioClip>("Audio/ambience");
+
+        if (ambienceClip == null)
+        {
+            Debug.LogWarning(
+                "Game ambience not found at Resources/Audio/ambience.");
+            return;
+        }
+
+        GameObject ambienceObject = new("Game Ambience");
+        ambienceObject.transform.SetParent(transform);
+
+        ambienceSource = ambienceObject.AddComponent<AudioSource>();
+        ambienceSource.clip = ambienceClip;
+        ambienceSource.loop = true;
+        ambienceSource.playOnAwake = false;
+        ambienceSource.spatialBlend = 0f;
+        ambienceSource.dopplerLevel = 0f;
+        ambienceSource.volume = 1f;
+    }
+
+    private void PlayAmbience()
+    {
+        if (ambienceSource != null &&
+            ambienceClip != null &&
+            !ambienceSource.isPlaying)
+        {
+            ambienceSource.Play();
+        }
     }
 
     private void OnEnable()
@@ -235,6 +275,7 @@ public sealed class MineGameManager : MonoBehaviour
         DisposeLevelStartInput();
 
         controls?.Dispose();
+        ambienceSource?.Stop();
 
         if (Instance == this)
             Instance = null;
@@ -326,10 +367,11 @@ public sealed class MineGameManager : MonoBehaviour
         exitingLevel = false;
         exitDirection = Vector2Int.zero;
         State = GameState.Playing;
-        message = "Collect all coal and destroy all rocks. Then collect the key to open the exit.";
+        message = "Collect all coal and destroy all rocks. Avoid the boss, collect the key and reach the exit.";
+        PlayAmbience();
         if (audioSource.clip == null)
         {
-            audioSource.clip = Resources.Load<AudioClip>("Audio/MinecrawlerNoVoice");
+            audioSource.clip = Resources.Load<AudioClip>("Audio/288_MinecrawlerNoVoice");
             audioSource.loop = true;
             audioSource.Play();
         }
@@ -365,7 +407,8 @@ public sealed class MineGameManager : MonoBehaviour
             return;
 
         playTimeTracker.SetPause(true);
-        audioSource.Pause();
+        audioSource?.Pause();
+        ambienceSource?.Pause();
         State = GameState.Paused;
         Time.timeScale = 0f;
 
@@ -378,7 +421,8 @@ public sealed class MineGameManager : MonoBehaviour
             return;
 
         playTimeTracker.SetPause(false);
-        audioSource.UnPause();
+        audioSource?.UnPause();
+        ambienceSource?.UnPause();
         Time.timeScale = 1f;
         State = GameState.Playing;
 
@@ -424,7 +468,7 @@ public sealed class MineGameManager : MonoBehaviour
         }
 
         State = GameState.LevelReady;
-        message = "Collect all coal and destroy all rocks. Then collect the key to open the exit.";
+        message = "Collect all coal and destroy all rocks. Avoid the boss, collect the key and reach the exit.";
         ArmContinueInput();
     }
 
@@ -455,56 +499,21 @@ public sealed class MineGameManager : MonoBehaviour
             board.FindBossBlockingMove(
                 currentPosition,
                 targetPosition);
+
         if (boss != null)
         {
             moves++;
 
-            bool destroyed = boss.Hit();
+            Camera.main?
+                .GetComponent<CameraShake>()?
+                .Shake(
+                    0.55f,
+                    0.18f);
 
-            board.Miner.Bounce();
+            TriggerGameOver(
+                "You crashed into the boss!");
 
-            Debug.Log(
-                $"Boss collision registered. HP now " +
-                $"{boss.HitPoints}/{boss.MaximumHitPoints}");
-
-            message =
-                destroyed
-                    ? "Boss destroyed!"
-                    : $"Boss hit! {boss.HitPoints}/{boss.MaximumHitPoints} HP remaining.";
-
-            if (audioSourceFx != null)
-            {
-                AudioClip hitClip =
-                    Resources.Load<AudioClip>("Audio/bossHit");
-
-                if (hitClip != null)
-                    audioSourceFx.PlayOneShot(hitClip, 0.8f);
-            }
-
-            if (destroyed)
-            {
-                int bossTier = Mathf.Max(1, CurrentLevel / 10);
-                score += 1000 * bossTier;
-
-                if (audioSourceFx != null)
-                {
-                    AudioClip destroyedClip =
-                        Resources.Load<AudioClip>("Audio/bossDestroyed");
-
-                    if (destroyedClip != null)
-                        audioSourceFx.PlayOneShot(destroyedClip);
-                }
-
-                Camera.main?
-                    .GetComponent<CameraShake>()?
-                    .Shake(0.45f, 0.16f);
-
-                boss.PlayDestroyedEffect();
-                board.RemoveBoss(boss);
-                message = "Boss destroyed!";
-                CheckLevelCleared();
-            }
-            return true;
+            return false;
         }
 
         if (board.IsWall(targetPosition))
@@ -572,6 +581,7 @@ public sealed class MineGameManager : MonoBehaviour
             return;
 
         audioSource?.Pause();
+        ambienceSource?.Pause();
 
         AudioClip gameOverClip =
             Resources.Load<AudioClip>(
@@ -588,7 +598,7 @@ public sealed class MineGameManager : MonoBehaviour
 
         message =
             reason +
-            " Press any key, mouse button or gamepad button to restart.";
+            " Press any key to restart.";
 
         ArmContinueInput();
 
@@ -700,14 +710,6 @@ public sealed class MineGameManager : MonoBehaviour
         if (board == null)
             return string.Empty;
 
-        if (board.RemainingBosses > 0)
-        {
-            return
-                $"{board.RemainingCoal} coal, " +
-                $"{board.RemainingObstacles} rocks and " +
-                $"{board.RemainingBosses} boss remaining.";
-        }
-
         return
             $"{board.RemainingCoal} coal and " +
             $"{board.RemainingObstacles} rocks remaining.";
@@ -723,8 +725,9 @@ public sealed class MineGameManager : MonoBehaviour
         if (State != GameState.Playing)
             return;
 
-        audioSource.Pause();
-        audioSourceFx.PlayOneShot(Resources.Load<AudioClip>("Audio/victory"));
+        audioSource?.Pause();
+        ambienceSource?.Pause();
+        audioSourceFx?.PlayOneShot(Resources.Load<AudioClip>("Audio/victory"));
         State = GameState.LevelCompleted;
 
         message = $"Level {currentLevelIndex + 1} complete!";
@@ -776,7 +779,7 @@ public sealed class MineGameManager : MonoBehaviour
 
         message =
             "Congratulations! You completed all levels. " +
-            "Press any key, mouse button or gamepad button to start a new game.";
+            "Press any key to start a new game.";
 
         ArmContinueInput();
     }

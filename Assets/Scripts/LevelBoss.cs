@@ -16,10 +16,11 @@ public enum BossAttackPattern
 }
 
 /// <summary>
-/// Stationärer Boss für jedes zehnte Level.
-/// Er blockiert sein Grid-Feld und verliert bei jedem Rammversuch
-/// einen Trefferpunkt.
+/// Single animated Mine Guardian used for every boss level.
+/// It is invulnerable, slowly follows the miner and shoots projectiles.
+/// Direct contact is fatal to the miner.
 /// </summary>
+[RequireComponent(typeof(LevelBossSpriteAnimator))]
 public sealed class LevelBoss : GridActor
 {
     private int hitPoints;
@@ -29,6 +30,7 @@ public sealed class LevelBoss : GridActor
     private float fireInterval;
     private float projectileSpeed;
     private float fireTimer;
+    private bool shootingEnabled = true;
 
     private bool destroyed;
     private bool berserkActive;
@@ -46,7 +48,7 @@ public sealed class LevelBoss : GridActor
     private bool initialized;
 
     [Header("Visual")]
-    [SerializeField] private float bossScale = 0.72f;
+    [SerializeField] private float bossScale = 0.92f;
     [SerializeField] private float healthBarWidth = 0.95f;
     [SerializeField] private float healthBarHeight = 0.10f;
     [SerializeField] private float healthBarOffsetY = 0.72f;
@@ -61,13 +63,14 @@ public sealed class LevelBoss : GridActor
 
     private BossAttackPattern attackPattern;
     private SpriteRenderer spriteRenderer;
+    private LevelBossSpriteAnimator spriteAnimator;
 
     public int HitPoints => hitPoints;
     public int MaximumHitPoints => maximumHitPoints;
     public int BossTier => bossTier;
     public bool IsDestroyed => destroyed;
     public BossAttackPattern AttackPattern => attackPattern;
-    public string BossName => GetBossName(bossTier);
+    public string BossName => "Mine Guardian";
 
     public void Initialize(
         int levelNumber,
@@ -104,24 +107,40 @@ public sealed class LevelBoss : GridActor
         GameDifficulty difficulty =
             GameSettings.Load().GameDifficulty;
 
-        projectileSpeed *= difficulty switch
+        shootingEnabled =
+            difficulty != GameDifficulty.Easy;
+
+        switch (difficulty)
         {
-            GameDifficulty.Easy => 0.80f,
-            GameDifficulty.Hardcore => 1.35f,
-            _ => 1f
-        };
+            case GameDifficulty.Hardcore:
+                // Faster firing cadence and faster projectiles.
+                fireInterval *= 0.65f;
+                projectileSpeed *= 1.28f;
+                break;
+
+            case GameDifficulty.Normal:
+                // Keep the current behaviour unchanged.
+                break;
+
+            case GameDifficulty.Easy:
+                // The boss still moves and must be avoided,
+                // but never fires projectiles.
+                break;
+        }
 
         fireTimer =
-            Random.Range(
-                fireInterval * 0.55f,
-                fireInterval);
+            shootingEnabled
+                ? Random.Range(
+                    fireInterval * 0.55f,
+                    fireInterval)
+                : float.PositiveInfinity;
 
         attackPattern =
             GetAttackPattern(bossTier);
 
         // Der Boss bewegt sich bewusst deutlich langsamer als der Miner.
-        moveInterval = Mathf.Lerp(1.65f, 0.85f, progress);
-        moveDuration = Mathf.Lerp(0.42f, 0.25f, progress);
+        moveInterval = Mathf.Lerp(2.65f, 1.55f, progress);
+        moveDuration = Mathf.Lerp(0.72f, 0.48f, progress);
         moveTimer = Random.Range(moveInterval * 0.5f, moveInterval);
 
         wobbleSpeed = Mathf.Lerp(2.1f, 3.8f, progress);
@@ -136,26 +155,15 @@ public sealed class LevelBoss : GridActor
                 gameObject.AddComponent<SpriteRenderer>();
         }
 
-        bool spriteApplied =
-            BossGraphicsInstaller.ApplyBossSprite(
-                spriteRenderer,
-                bossTier);
-
-        if (!spriteApplied)
-        {
-            spriteRenderer.color =
-                Color.Lerp(
-                    new Color(0.95f, 0.50f, 0.18f),
-                    new Color(0.90f, 0.03f, 0.05f),
-                    progress);
-        }
+        spriteRenderer.color =
+            Color.white;
 
         spriteRenderer.sortingOrder = 4;
+
+        spriteAnimator =
+            GetComponent<LevelBossSpriteAnimator>();
         transform.localScale =
             Vector3.one * bossScale;
-
-        CreateHealthBar();
-        UpdateHealthBar();
 
         initialized = true;
     }
@@ -180,13 +188,13 @@ public sealed class LevelBoss : GridActor
             return;
         }
 
-        UpdateHealthBarPosition();
-        UpdateHealthBar();
-
         UpdateBerserkMode();
         UpdateMovement(game.Board, miner);
 
         if (attackInProgress)
+            return;
+
+        if (!shootingEnabled)
             return;
 
         // Im Nahbereich verfolgt und rammt der Boss den Miner,
@@ -215,44 +223,8 @@ public sealed class LevelBoss : GridActor
 
     public bool Hit()
     {
-        if (destroyed)
-            return true;
-
-        if (!initialized)
-        {
-            Debug.LogWarning(
-                "Boss was hit before Initialize(). Applying fallback HP.");
-
-            bossTier = Mathf.Max(1, bossTier);
-            maximumHitPoints = Mathf.Max(1, maximumHitPoints);
-            hitPoints = Mathf.Max(1, hitPoints);
-            initialized = true;
-        }
-
-        int previousHp = hitPoints;
-
-        hitPoints =
-            Mathf.Max(
-                0,
-                hitPoints - 1);
-
-        UpdateHealthBar();
-
-        movementBlockedUntil =
-            Time.time + 1.0f;
-
-        StartCoroutine(HitFlash());
-
-        Debug.Log(
-            $"Boss damage: {previousHp} -> {hitPoints} / {maximumHitPoints}");
-
-        if (hitPoints > 0)
-            return false;
-
-        destroyed = true;
-        UpdateHealthBar();
-        StopAllCoroutines();
-        return true;
+        // The Mine Guardian is an avoidance hazard and cannot be damaged.
+        return false;
     }
 
     public void PlayDestroyedEffect()
@@ -932,6 +904,14 @@ public sealed class LevelBoss : GridActor
         Vector2Int targetPosition)
     {
         movementInProgress = true;
+
+        Vector2Int direction =
+            targetPosition -
+            GridPosition;
+
+        spriteAnimator?
+            .SetMovementDirection(
+                direction);
 
         Vector3 start =
             transform.position;

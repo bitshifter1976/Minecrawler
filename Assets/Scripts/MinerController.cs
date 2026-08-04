@@ -8,6 +8,7 @@ public sealed class MinerController : GridActor
     private Vector2Int moveDirection = Vector2Int.right;
     private float moveTimer;
     private MinerDustTrail dustTrail;
+    private MinerLocomotiveAudio movementSound;
 
     private void Awake()
     {
@@ -20,6 +21,10 @@ public sealed class MinerController : GridActor
 
         if (dustTrail == null)
             dustTrail = gameObject.AddComponent<MinerDustTrail>();
+
+        gameObject.AddComponent<AudioSource>();
+        if (movementSound == null)
+            movementSound = gameObject.AddComponent<MinerLocomotiveAudio>();
     }
 
     private void OnEnable()
@@ -54,22 +59,14 @@ public sealed class MinerController : GridActor
             return;
 
         moveTimer += Time.deltaTime;
-
         if (moveTimer < game.AutomaticMoveInterval)
             return;
-
         moveTimer -= game.AutomaticMoveInterval;
 
-        Vector3 previousPosition =
-            transform.position;
-
-        game.TryMoveMiner(moveDirection);
-
-        if (transform.position != previousPosition)
+        Vector3 previousPosition = transform.position;
+        if (game.TryMoveMiner(moveDirection) && transform.position != previousPosition)
         {
-            dustTrail?.EmitMovementDust(
-                previousPosition,
-                moveDirection);
+            dustTrail?.EmitMovementDust(previousPosition, moveDirection);
         }
     }
 
