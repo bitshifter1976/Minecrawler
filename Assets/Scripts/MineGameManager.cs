@@ -1,5 +1,7 @@
+using NUnit.Framework;
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
 using UnityEngine.InputSystem;
@@ -9,7 +11,7 @@ using Debug = UnityEngine.Debug;
 
 public sealed class MineGameManager : MonoBehaviour
 {
-    public static readonly string Version = "v1.4";
+    public static readonly string Version = "v0.5";
 
     private IDisposable startInputSubscription;
     private const int LevelCount = 100;
@@ -29,7 +31,6 @@ public sealed class MineGameManager : MonoBehaviour
     private int moves;
     private PlayTimeTracker playTimeTracker;
     private string message = "Collect all coal chunks.";
-    private bool exitingLevel;
     private Vector2Int exitDirection;
     private int lastScreenWidth;
     private int lastScreenHeight;
@@ -52,9 +53,13 @@ public sealed class MineGameManager : MonoBehaviour
 
     public bool IsPlaying => State == GameState.Playing;
 
+    public bool CanMinerAdvance =>
+        State == GameState.Playing ||
+        State == GameState.Exiting;
+
     public bool IsWaitingForStart => State == GameState.LevelReady;
 
-    public bool IsExiting => exitingLevel;
+    public bool IsExiting => State == GameState.Exiting;
 
     public int CurrentLevel => currentLevelIndex + 1;
 
@@ -211,7 +216,7 @@ public sealed class MineGameManager : MonoBehaviour
         }
         currentLevelIndex = settings.CurrentLevel - 1;
         currentLevelIndex = Mathf.Clamp(currentLevelIndex, 0, LevelCount - 1);
-        currentLevelIndex = 9;
+        currentLevelIndex = 25;
 
         LoadLevel(currentLevelIndex);
         SetupCamera();
@@ -255,7 +260,7 @@ public sealed class MineGameManager : MonoBehaviour
     private void OnEnable()
     {
         controls.Gameplay.Restart.performed += OnRestart;
-        controls.Gameplay.Options.performed += (callback) => SceneManager.LoadScene(2);
+        controls.Gameplay.Options.performed += OnOptions;
         controls.Gameplay.Enable();
         playTimeTracker.SetPause(false);
     }
@@ -264,40 +269,63 @@ public sealed class MineGameManager : MonoBehaviour
     {
         controls.Gameplay.Disable();
         controls.Gameplay.Restart.performed -= OnRestart;
-        controls.Gameplay.Options.performed -= (callback) => SceneManager.LoadScene(2);
+        controls.Gameplay.Options.performed -= OnOptions;
         playTimeTracker.SetPause(true);
     }
 
     private void OnDestroy()
     {
-        board.RemoveKey();
+        board?.RemoveKey();
         StopLevelTransition();
         DisposeLevelStartInput();
 
-        controls?.Dispose();
-        ambienceSource?.Stop();
+        if (controls != null)
+            controls.Dispose();
+        if (ambienceSource != null)
+            ambienceSource.Stop();
 
         if (Instance == this)
             Instance = null;
+    }
+
+    private void OnOptions(InputAction.CallbackContext context)
+    {
+        OpenOptionsMenu();
+    }
+
+    public void OpenOptionsMenu()
+    {
+        if (State == GameState.Loading)
+            return;
+
+        settings ??= GameSettings.Load();
+        settings.LastSceneIndex = 1;
+        settings.Score = score;
+        settings.CurrentLevel = currentLevelIndex + 1;
+        settings.Moves = moves;
+        settings.Playtime = playTimeTracker != null
+            ? playTimeTracker.TotalPlayTime
+            : settings.Playtime;
+        settings.Save();
+
+        Time.timeScale = 1f;
+        SceneManager.LoadScene(2);
     }
 
     private void OnRestart(InputAction.CallbackContext context)
     {
         switch (State)
         {
-            case GameState.Loading:
-                return;
-
             case GameState.LevelReady:
                 StartLevel();
                 break;
 
-            case GameState.Victory:
-                StartNewGame();
+            case GameState.GameOver:
+                RestartCurrentLevel();
                 break;
 
-            default:
-                RestartCurrentLevel();
+            case GameState.Victory:
+                StartNewGame();
                 break;
         }
     }
@@ -364,15 +392,20 @@ public sealed class MineGameManager : MonoBehaviour
             return;
 
         DisposeLevelStartInput();
-        exitingLevel = false;
         exitDirection = Vector2Int.zero;
         State = GameState.Playing;
-        message = "Collect all coal and destroy all rocks. Avoid the boss, collect the key and reach the exit.";
+        message = "Collect all coal and destroy all rocks. collect the key and reach the exit.";
+        var levelWithBoss = new List<int>() { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 };
+        if (levelWithBoss.Contains(CurrentLevel))
+            message = "Collect all coal and destroy all rocks. Avoid the boss and reach the exit.";
+        else
+            message = "Collect all coal and destroy all rocks. Collect the key and reach the exit.";
         PlayAmbience();
         if (audioSource.clip == null)
         {
             audioSource.clip = Resources.Load<AudioClip>("Audio/288_MinecrawlerNoVoice");
             audioSource.loop = true;
+            audioSource.volume = 0.25f;
             audioSource.Play();
         }
         else
@@ -449,7 +482,6 @@ public sealed class MineGameManager : MonoBehaviour
 
         board.RemoveKey();
         currentLevelIndex = Mathf.Clamp(levelIndex, 0, LevelCount - 1);
-        exitingLevel = false;
         exitDirection = Vector2Int.zero;
         board.Tail.Clear();
 
@@ -474,20 +506,27 @@ public sealed class MineGameManager : MonoBehaviour
 
     public bool TryMoveMiner(Vector2Int direction)
     {
-        if (State != GameState.Playing || board.Miner == null || direction == Vector2Int.zero)
+        if (board == null ||
+            board.Miner == null ||
+            direction == Vector2Int.zero)
         {
             return false;
         }
 
-        Vector2Int currentPosition = board.Miner.GridPosition;
+        Vector2Int currentPosition =
+            board.Miner.GridPosition;
 
-        if (exitingLevel)
+        if (State == GameState.Exiting)
         {
-            MoveThroughExit(currentPosition);
-            return true;
+            return MoveThroughExit(
+                currentPosition);
         }
 
-        Vector2Int targetPosition = currentPosition + direction;
+        if (State != GameState.Playing)
+            return false;
+
+        Vector2Int targetPosition =
+            currentPosition + direction;
 
         if (!board.IsInside(targetPosition))
         {
@@ -529,6 +568,8 @@ public sealed class MineGameManager : MonoBehaviour
                 TriggerGameOver("The exit is still closed!");
                 return false;
             }
+            // TryEnterExit() hat Miner UND Tail bereits bewegt.
+            return true;
         }
 
         if (board.Tail.Contains(targetPosition))
@@ -580,8 +621,11 @@ public sealed class MineGameManager : MonoBehaviour
         if (State != GameState.Playing)
             return;
 
-        audioSource?.Pause();
-        ambienceSource?.Pause();
+        if (audioSource != null)
+            audioSource.Pause();
+
+        if (ambienceSource != null)
+            ambienceSource.Pause();
 
         AudioClip gameOverClip =
             Resources.Load<AudioClip>(
@@ -628,23 +672,32 @@ public sealed class MineGameManager : MonoBehaviour
         board.Tail.Move(previousMinerPosition);
 
         moves++;
-        exitingLevel = true;
+        State = GameState.Exiting;
         message = "Leaving the mine...";
+
+        DestroyAllBossHazards();
 
         return true;
     }
 
-    private void MoveThroughExit(Vector2Int currentMinerPosition)
+    private bool MoveThroughExit(Vector2Int currentMinerPosition)
     {
-        Vector2Int nextMinerPosition = currentMinerPosition + exitDirection;
+        if (State != GameState.Exiting ||
+            board?.Miner == null)
+        {
+            return false;
+        }
+
+        Vector2Int nextMinerPosition =
+            currentMinerPosition + exitDirection;
 
         board.Miner.SetGridPosition(nextMinerPosition);
         board.Tail.Move(currentMinerPosition);
         board.Tail.RemoveOutside(board.Width, board.Height);
-
         moves++;
 
-        bool minerIsOutside = !board.IsInside(board.Miner.GridPosition);
+        bool minerIsOutside =
+            !board.IsInside(board.Miner.GridPosition);
 
         if (minerIsOutside)
         {
@@ -657,9 +710,11 @@ public sealed class MineGameManager : MonoBehaviour
 
         if (minerIsOutside && board.Tail.IsEmpty)
         {
-            exitingLevel = false;
             CompleteLevel();
+            return false;
         }
+
+        return true;
     }
 
     private Vector2Int GetExitDirection(Vector2Int exitPosition)
@@ -717,24 +772,62 @@ public sealed class MineGameManager : MonoBehaviour
 
     public void BossProjectileHit()
     {
+        if (State != GameState.Playing)
+            return;
+
         TriggerGameOver("You were hit by the boss!");
     }
 
     private void CompleteLevel()
     {
-        if (State != GameState.Playing)
+        if (State != GameState.Exiting)
             return;
 
-        audioSource?.Pause();
-        ambienceSource?.Pause();
-        audioSourceFx?.PlayOneShot(Resources.Load<AudioClip>("Audio/victory"));
         State = GameState.LevelCompleted;
+        exitDirection = Vector2Int.zero;
+
+        if (board?.Miner != null)
+            board.Miner.enabled = false;
+
+        DestroyAllBossHazards();
+
+        if (audioSource != null)
+            audioSource.Pause();
+        if (ambienceSource != null)
+            ambienceSource.Pause();
+        playTimeTracker?.SetPause(true);
+
+        AudioClip victoryClip =
+            Resources.Load<AudioClip>("Audio/victory");
+
+        if (audioSourceFx != null && victoryClip != null)
+            audioSourceFx.PlayOneShot(victoryClip);
 
         message = $"Level {currentLevelIndex + 1} complete!";
 
         StopLevelTransition();
+        levelTransitionCoroutine =
+            StartCoroutine(LevelCompletedRoutine());
+    }
 
-        levelTransitionCoroutine = StartCoroutine(LevelCompletedRoutine());
+    private static void DestroyAllBossHazards()
+    {
+        BossProjectile[] projectiles =
+            FindObjectsByType<BossProjectile>();
+        foreach (BossProjectile projectile in projectiles)
+        {
+            if (projectile != null)
+                Destroy(projectile.gameObject);
+        }
+
+        BossMine[] mines =
+            FindObjectsByType<BossMine>();
+
+        foreach (BossMine mine in mines)
+        {
+            if (mine != null)
+                Destroy(mine.gameObject);
+        }
     }
 
     private IEnumerator LevelCompletedRoutine()

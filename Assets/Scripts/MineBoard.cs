@@ -21,8 +21,8 @@ public sealed class MineBoard
     private Sprite cartSprite;
     private Sprite minerSprite;
     private Sprite keySprite;
-    private Sprite bossSprite;
-    private Sprite bossProjectileSprite;
+    private readonly Sprite bossSprite;
+    private readonly Sprite bossProjectileSprite;
     private int levelNumber;
     private KeyPickup spawnedKey;
 
@@ -51,7 +51,20 @@ public sealed class MineBoard
     public MineTail Tail => tail;
     public KeyPickup SpawnedKey => spawnedKey;
 
-    public MineBoard(Transform parent, Sprite squareSprite, Sprite wallSprite, Sprite rockSprite, Sprite coalSprite, Sprite floorSprite, Sprite doorClosedSprite, Sprite doorOpenSprite, Sprite cartSprite, Sprite minerSprite, Sprite keySprite, Sprite bossSprite, Sprite bossProjectileSprite)
+    public MineBoard(
+        Transform parent,
+        Sprite squareSprite,
+        Sprite wallSprite,
+        Sprite rockSprite,
+        Sprite coalSprite,
+        Sprite floorSprite,
+        Sprite doorClosedSprite,
+        Sprite doorOpenSprite,
+        Sprite cartSprite,
+        Sprite minerSprite,
+        Sprite keySprite,
+        Sprite bossSprite,
+        Sprite bossProjectileSprite)
     {
         this.parent = parent;
         this.squareSprite = squareSprite;
@@ -215,6 +228,7 @@ public sealed class MineBoard
         coal.Clear();
         obstacles.Clear();
         bosses.Clear();
+        tail = new MineTail();
 
         Miner = null;
 
@@ -281,71 +295,14 @@ public sealed class MineBoard
         Vector2Int currentPosition,
         Vector2Int targetPosition)
     {
-        Vector2 currentWorld =
-            new(currentPosition.x, currentPosition.y);
-
-        Vector2 targetWorld =
-            new(targetPosition.x, targetPosition.y);
-
         foreach (LevelBoss boss in bosses.Values)
         {
-            if (boss == null ||
-                boss.IsDestroyed)
-            {
+            if (boss == null)
                 continue;
-            }
 
-            // 1. Das reservierte Grid-Feld des Bosses blockiert immer.
-            if (boss.GridPosition == targetPosition)
-                return boss;
-
-            Vector2 bossWorld =
-                boss.transform.position;
-
-            Vector2Int visibleGridPosition =
-                new(
-                    Mathf.RoundToInt(bossWorld.x),
-                    Mathf.RoundToInt(bossWorld.y));
-
-            // 2. Während einer Animation blockiert auch das aktuell sichtbare Feld.
-            if (visibleGridPosition == targetPosition)
-                return boss;
-
-            // 3. Symmetrische Kollisionsprüfung über den kompletten
-            // Bewegungsschritt des Miners. Dadurch funktioniert der Treffer
-            // von oben, unten, links und rechts identisch.
-            Vector2 movementSegment =
-                targetWorld - currentWorld;
-
-            float segmentLengthSquared =
-                movementSegment.sqrMagnitude;
-
-            if (segmentLengthSquared > 0.0001f)
-            {
-                float t =
-                    Mathf.Clamp01(
-                        Vector2.Dot(
-                            bossWorld - currentWorld,
-                            movementSegment) /
-                        segmentLengthSquared);
-
-                Vector2 closestPoint =
-                    currentWorld +
-                    movementSegment * t;
-
-                if (Vector2.Distance(
-                        bossWorld,
-                        closestPoint) <= 0.92f)
-                {
-                    return boss;
-                }
-            }
-
-            // 4. Zusätzlicher Radius um das Zielfeld, damit der verkleinerte
-            // und wackelnde Sprite nicht optisch durchfahren werden kann.
-            if (Vector2.Distance(
-                    bossWorld,
-                    targetWorld) <= 1.02f)
+            if (boss.BlocksMinerMove(
+                    currentPosition,
+                    targetPosition))
             {
                 return boss;
             }
@@ -400,6 +357,12 @@ public sealed class MineBoard
 
         if (tail.Contains(position))
             return false;
+
+        if (Miner != null &&
+            Miner.GridPosition == position)
+        {
+            return false;
+        }
 
         return true;
     }
@@ -683,39 +646,72 @@ public sealed class MineBoard
         if (spawnedKey != null)
             return;
 
-        var pos = FindFreeKeyPosition();
-        var keyTile = CreateTile("Key", pos, Color.yellow, 2, 0.5f, keySprite);
+        if (!TryFindFreeKeyPosition(
+                out Vector2Int pos))
+        {
+            Debug.LogError(
+                "No free position available for the exit key.");
+            return;
+        }
+
+        var keyTile =
+            CreateTile(
+                "Key",
+                pos,
+                Color.yellow,
+                2,
+                0.5f,
+                keySprite);
         spawnedKey = keyTile.AddComponent<KeyPickup>();
         spawnedKey.SetGridPosition(pos);
     }
 
-    private Vector2Int FindFreeKeyPosition()
+    private bool TryFindFreeKeyPosition(
+        out Vector2Int bestPosition)
     {
-        Vector2Int minerPosition = Miner.GridPosition;
-        Vector2Int bestPosition = minerPosition;
-        float bestDistance = -1f;
+        bestPosition = default;
 
-        for (int y = 0; y < Height; y++)
+        if (Miner == null)
+            return false;
+
+        Vector2Int minerPosition =
+            Miner.GridPosition;
+
+        float bestDistance =
+            -1f;
+
+        bool found =
+            false;
+
+        for (int y = 0;
+             y < Height;
+             y++)
         {
-            for (int x = 0; x < Width; x++)
+            for (int x = 0;
+                 x < Width;
+                 x++)
             {
-                Vector2Int position = new(x, y);
+                Vector2Int position =
+                    new(x, y);
 
                 if (!IsValidKeyPosition(position))
                     continue;
 
                 float distance =
-                    Vector2Int.Distance(minerPosition, position);
+                    Vector2Int.Distance(
+                        minerPosition,
+                        position);
 
-                if (distance > bestDistance)
-                {
-                    bestDistance = distance;
-                    bestPosition = position;
-                }
+                if (distance <= bestDistance)
+                    continue;
+
+                bestDistance = distance;
+                bestPosition = position;
+                found = true;
             }
         }
 
-        return bestPosition;
+        return found;
     }
 
     private bool IsValidKeyPosition(Vector2Int position)

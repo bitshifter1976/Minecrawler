@@ -23,6 +23,13 @@ public enum BossAttackPattern
 [RequireComponent(typeof(LevelBossSpriteAnimator))]
 public sealed class LevelBoss : GridActor
 {
+    private enum BossState
+    {
+        Waiting,
+        Moving,
+        Attacking
+    }
+
     private int hitPoints;
     private int maximumHitPoints;
     private int bossTier;
@@ -32,10 +39,7 @@ public sealed class LevelBoss : GridActor
     private float fireTimer;
     private bool shootingEnabled = true;
 
-    private bool destroyed;
-    private bool berserkActive;
-    private bool attackInProgress;
-    private bool movementInProgress;
+    private BossState state = BossState.Waiting;
 
     private float moveTimer;
     private float moveInterval;
@@ -44,22 +48,12 @@ public sealed class LevelBoss : GridActor
     private float wobbleTime;
     private float wobbleSpeed;
     private float wobbleAngle;
-    private float movementBlockedUntil;
-    private bool initialized;
 
     [Header("Visual")]
     [SerializeField] private float bossScale = 0.92f;
-    [SerializeField] private float healthBarWidth = 0.95f;
-    [SerializeField] private float healthBarHeight = 0.10f;
-    [SerializeField] private float healthBarOffsetY = 0.72f;
 
     [Header("Combat")]
     [SerializeField] private float minimumFireDistance = 2.25f;
-
-    private GameObject healthBarRoot;
-    private SpriteRenderer healthBarBackground;
-    private SpriteRenderer healthBarFill;
-    private static Sprite healthBarSprite;
 
     private BossAttackPattern attackPattern;
     private SpriteRenderer spriteRenderer;
@@ -68,7 +62,7 @@ public sealed class LevelBoss : GridActor
     public int HitPoints => hitPoints;
     public int MaximumHitPoints => maximumHitPoints;
     public int BossTier => bossTier;
-    public bool IsDestroyed => destroyed;
+    public bool IsDestroyed => false;
     public BossAttackPattern AttackPattern => attackPattern;
     public string BossName => "Mine Guardian";
 
@@ -86,11 +80,8 @@ public sealed class LevelBoss : GridActor
         float progress =
             (bossTier - 1f) / 9f;
 
-        maximumHitPoints =
-            GetHitPoints(bossTier);
-
-        hitPoints =
-            maximumHitPoints;
+        maximumHitPoints = 1;
+        hitPoints = 1;
 
         fireInterval =
             Mathf.Lerp(
@@ -165,15 +156,11 @@ public sealed class LevelBoss : GridActor
         transform.localScale =
             Vector3.one * bossScale;
 
-        initialized = true;
     }
 
     private void Update()
     {
         AnimateWobble();
-
-        if (destroyed)
-            return;
 
         MineGameManager game =
             MineGameManager.Instance;
@@ -188,10 +175,9 @@ public sealed class LevelBoss : GridActor
             return;
         }
 
-        UpdateBerserkMode();
         UpdateMovement(game.Board, miner);
 
-        if (attackInProgress)
+        if (state != BossState.Waiting)
             return;
 
         if (!shootingEnabled)
@@ -215,6 +201,58 @@ public sealed class LevelBoss : GridActor
     /// Entspricht BreakableObstacle.Hit().
     /// true bedeutet, dass der Boss zerstört wurde.
     /// </summary>
+    public bool BlocksMinerMove(
+        Vector2Int currentPosition,
+        Vector2Int targetPosition)
+    {
+        if (GridPosition == targetPosition)
+            return true;
+
+        Vector2 bossPosition =
+            transform.position;
+
+        Vector2 target =
+            new(
+                targetPosition.x,
+                targetPosition.y);
+
+        if (Vector2.Distance(
+                bossPosition,
+                target) <= 0.58f)
+        {
+            return true;
+        }
+
+        Vector2 start =
+            new(
+                currentPosition.x,
+                currentPosition.y);
+
+        Vector2 segment =
+            target - start;
+
+        float lengthSquared =
+            segment.sqrMagnitude;
+
+        if (lengthSquared <= 0.0001f)
+            return false;
+
+        float t =
+            Mathf.Clamp01(
+                Vector2.Dot(
+                    bossPosition - start,
+                    segment) /
+                lengthSquared);
+
+        Vector2 closest =
+            start +
+            segment * t;
+
+        return Vector2.Distance(
+            bossPosition,
+            closest) <= 0.46f;
+    }
+
     public void ReserveGridPosition(
         Vector2Int position)
     {
@@ -243,7 +281,7 @@ public sealed class LevelBoss : GridActor
     private IEnumerator FirePattern(
         MinerController miner)
     {
-        attackInProgress = true;
+        state = BossState.Attacking;
 
         Vector2 aimed =
             GetCardinalDirection(
@@ -307,7 +345,7 @@ public sealed class LevelBoss : GridActor
             case BossAttackPattern.Berserker:
                 yield return FireBurst(
                     aimed,
-                    berserkActive ? 8 : 4,
+                    bossTier >= 9 ? 6 : 4,
                     0.09f,
                     false);
 
@@ -334,12 +372,12 @@ public sealed class LevelBoss : GridActor
         }
 
         float interval =
-            berserkActive
-                ? fireInterval * 0.48f
+            bossTier >= 9
+                ? fireInterval * 0.72f
                 : fireInterval;
 
         fireTimer = interval;
-        attackInProgress = false;
+        state = BossState.Waiting;
     }
 
     private IEnumerator FireBurst(
@@ -352,8 +390,15 @@ public sealed class LevelBoss : GridActor
              index < count;
              index++)
         {
-            if (destroyed)
+            MineGameManager game =
+                MineGameManager.Instance;
+
+            if (game == null ||
+                game.State != GameState.Playing)
+            {
+                state = BossState.Waiting;
                 yield break;
+            }
 
             MinerController miner =
                 MineGameManager.Instance?.Board?.Miner;
@@ -466,8 +511,8 @@ public sealed class LevelBoss : GridActor
                 : 0;
 
         float speedMultiplier =
-            berserkActive
-                ? 1.25f
+            bossTier >= 9
+                ? 1.15f
                 : 1f;
 
         projectile.Initialize(
@@ -567,198 +612,11 @@ public sealed class LevelBoss : GridActor
             minimumFireDistance;
     }
 
-    private void CreateHealthBar()
-    {
-        if (healthBarRoot != null)
-            return;
-
-        healthBarRoot =
-            new GameObject("Boss Health Bar");
-
-        healthBarRoot.transform.SetParent(
-            transform.parent);
-
-        GameObject backgroundObject =
-            new("Background");
-
-        backgroundObject.transform.SetParent(
-            healthBarRoot.transform);
-
-        healthBarBackground =
-            backgroundObject.AddComponent<SpriteRenderer>();
-
-        healthBarBackground.sprite =
-            GetHealthBarSprite();
-
-        healthBarBackground.color =
-            new Color(
-                0.08f,
-                0.03f,
-                0.03f,
-                0.96f);
-
-        healthBarBackground.sortingOrder = 20;
-
-        GameObject fillObject =
-            new("Fill");
-
-        fillObject.transform.SetParent(
-            healthBarRoot.transform);
-
-        healthBarFill =
-            fillObject.AddComponent<SpriteRenderer>();
-
-        healthBarFill.sprite =
-            GetHealthBarSprite();
-
-        healthBarFill.color =
-            new Color(
-                0.20f,
-                0.90f,
-                0.22f,
-                1f);
-
-        healthBarFill.sortingOrder = 21;
-
-        UpdateHealthBarPosition();
-    }
-
-    private void UpdateHealthBarPosition()
-    {
-        if (healthBarRoot == null)
-            return;
-
-        healthBarRoot.transform.position =
-            transform.position +
-            Vector3.up * healthBarOffsetY;
-
-        // Die Anzeige bleibt gerade, auch wenn der Boss wackelt.
-        healthBarRoot.transform.rotation =
-            Quaternion.identity;
-    }
-
-    private void UpdateHealthBar()
-    {
-        if (healthBarRoot == null ||
-            healthBarBackground == null ||
-            healthBarFill == null)
-        {
-            return;
-        }
-
-        float ratio =
-            maximumHitPoints <= 0
-                ? 0f
-                : Mathf.Clamp01(
-                    (float)hitPoints /
-                    maximumHitPoints);
-
-        healthBarBackground.transform.localPosition =
-            Vector3.zero;
-
-        healthBarBackground.transform.localScale =
-            new Vector3(
-                healthBarWidth,
-                healthBarHeight,
-                1f);
-
-        healthBarFill.transform.localScale =
-            new Vector3(
-                healthBarWidth * ratio,
-                healthBarHeight * 0.68f,
-                1f);
-
-        healthBarFill.transform.localPosition =
-            new Vector3(
-                -healthBarWidth *
-                (1f - ratio) *
-                0.5f,
-                0f,
-                -0.01f);
-
-        healthBarFill.color =
-            Color.Lerp(
-                new Color(0.92f, 0.08f, 0.04f),
-                new Color(0.20f, 0.90f, 0.22f),
-                ratio);
-
-        healthBarRoot.SetActive(
-            !destroyed &&
-            hitPoints > 0);
-    }
-
-    private static Sprite GetHealthBarSprite()
-    {
-        if (healthBarSprite != null)
-            return healthBarSprite;
-
-        Texture2D texture =
-            new Texture2D(1, 1)
-            {
-                name = "Runtime Boss Health Bar",
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp,
-                hideFlags = HideFlags.HideAndDontSave
-            };
-
-        texture.SetPixel(
-            0,
-            0,
-            Color.white);
-
-        texture.Apply();
-
-        healthBarSprite =
-            Sprite.Create(
-                texture,
-                new Rect(
-                    0f,
-                    0f,
-                    1f,
-                    1f),
-                new Vector2(
-                    0.5f,
-                    0.5f),
-                1f);
-
-        healthBarSprite.name =
-            "Runtime Boss Health Bar Sprite";
-
-        return healthBarSprite;
-    }
-
-    private void OnDestroy()
-    {
-        if (healthBarRoot != null)
-            Object.Destroy(healthBarRoot);
-    }
-
-    private void UpdateBerserkMode()
-    {
-        if (bossTier < 9 ||
-            berserkActive)
-        {
-            return;
-        }
-
-        if (hitPoints <=
-            Mathf.CeilToInt(
-                maximumHitPoints *
-                0.5f))
-        {
-            berserkActive = true;
-        }
-    }
-
-
     private void UpdateMovement(
         MineBoard board,
         MinerController miner)
     {
-        if (destroyed ||
-            movementInProgress ||
-            attackInProgress ||
-            Time.time < movementBlockedUntil)
+        if (state != BossState.Waiting)
         {
             return;
         }
@@ -903,7 +761,7 @@ public sealed class LevelBoss : GridActor
     private IEnumerator MoveToGridPosition(
         Vector2Int targetPosition)
     {
-        movementInProgress = true;
+        state = BossState.Moving;
 
         Vector2Int direction =
             targetPosition -
@@ -945,7 +803,15 @@ public sealed class LevelBoss : GridActor
         }
 
         transform.position = target;
-        movementInProgress = false;
+
+        MineGameManager game =
+            MineGameManager.Instance;
+
+        state =
+            game != null &&
+            game.State == GameState.Playing
+                ? BossState.Waiting
+                : BossState.Waiting;
     }
 
     private void AnimateWobble()
@@ -983,22 +849,6 @@ public sealed class LevelBoss : GridActor
             spriteRenderer.color = original;
     }
 
-    private static int GetHitPoints(
-        int tier)
-    {
-        int[] values =
-        {
-            4, 6, 8, 11, 14,
-            18, 22, 27, 33, 42
-        };
-
-        return values[
-            Mathf.Clamp(
-                tier - 1,
-                0,
-                values.Length - 1)];
-    }
-
     private static BossAttackPattern GetAttackPattern(
         int tier)
     {
@@ -1008,30 +858,6 @@ public sealed class LevelBoss : GridActor
                 tier - 1,
                 0,
                 9);
-    }
-
-    private static string GetBossName(
-        int tier)
-    {
-        string[] names =
-        {
-            "MINE GUARD",
-            "CAVE TURRET",
-            "DEEP SNIPER",
-            "TRIPLE CORE",
-            "RAPID DRILL",
-            "RICOCHET ENGINE",
-            "MINE LAYER",
-            "ROCK SUMMONER",
-            "BERSERKER",
-            "MINE KING"
-        };
-
-        return names[
-            Mathf.Clamp(
-                tier - 1,
-                0,
-                names.Length - 1)];
     }
 
     private static Vector2 GetCardinalDirection(

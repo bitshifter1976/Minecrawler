@@ -85,8 +85,11 @@ public sealed class BossProjectile : MonoBehaviour
             return;
         }
 
-        if (!game.IsPlaying)
+        if (game.State != GameState.Playing)
+        {
+            Destroy(gameObject);
             return;
+        }
 
         Vector3 previousPosition =
             transform.position;
@@ -105,8 +108,14 @@ public sealed class BossProjectile : MonoBehaviour
             return;
         }
 
-        if (CheckMinerHit(game, board))
+        if (CheckMinerHit(
+                game,
+                board,
+                previousPosition,
+                transform.position))
+        {
             return;
+        }
 
         Vector2Int currentGridPosition =
             ToGrid(transform.position);
@@ -152,21 +161,50 @@ public sealed class BossProjectile : MonoBehaviour
 
     private bool CheckMinerHit(
         MineGameManager game,
-        MineBoard board)
+        MineBoard board,
+        Vector2 previousPosition,
+        Vector2 currentPosition)
     {
         MinerController miner =
             board.Miner;
 
-        if (miner == null)
+        if (miner == null ||
+            game.State != GameState.Playing)
+        {
             return false;
+        }
 
-        float distance =
-            Vector2.Distance(
-                transform.position,
-                miner.transform.position);
+        Vector2 minerPosition =
+            miner.transform.position;
 
-        if (distance > minerHitRadius)
+        Vector2 movement =
+            currentPosition -
+            previousPosition;
+
+        float lengthSquared =
+            movement.sqrMagnitude;
+
+        float t =
+            lengthSquared <= 0.000001f
+                ? 0f
+                : Mathf.Clamp01(
+                    Vector2.Dot(
+                        minerPosition -
+                        previousPosition,
+                        movement) /
+                    lengthSquared);
+
+        Vector2 closestPoint =
+            previousPosition +
+            movement * t;
+
+        if (Vector2.Distance(
+                closestPoint,
+                minerPosition) >
+            minerHitRadius)
+        {
             return false;
+        }
 
         game.BossProjectileHit();
         Destroy(gameObject);

@@ -22,9 +22,14 @@ public sealed class MinerController : GridActor
         if (dustTrail == null)
             dustTrail = gameObject.AddComponent<MinerDustTrail>();
 
-        gameObject.AddComponent<AudioSource>();
+        movementSound =
+            GetComponent<MinerLocomotiveAudio>();
+
         if (movementSound == null)
-            movementSound = gameObject.AddComponent<MinerLocomotiveAudio>();
+        {
+            movementSound =
+                gameObject.AddComponent<MinerLocomotiveAudio>();
+        }
     }
 
     private void OnEnable()
@@ -55,7 +60,7 @@ public sealed class MinerController : GridActor
     {
         MineGameManager game = MineGameManager.Instance;
 
-        if (game == null || !game.IsPlaying)
+        if (game == null || !game.CanMinerAdvance)
             return;
 
         moveTimer += Time.deltaTime;
