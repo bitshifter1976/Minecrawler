@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -128,7 +129,7 @@ public sealed class LevelBoss : GridActor
 
         fireTimer =
             shootingEnabled
-                ? Random.Range(
+                ? UnityEngine.Random.Range(
                     fireInterval * 0.55f,
                     fireInterval)
                 : float.PositiveInfinity;
@@ -139,7 +140,7 @@ public sealed class LevelBoss : GridActor
         // Der Boss bewegt sich bewusst deutlich langsamer als der Miner.
         moveInterval = Mathf.Lerp(2.65f, 1.55f, progress);
         moveDuration = Mathf.Lerp(0.72f, 0.48f, progress);
-        moveTimer = Random.Range(moveInterval * 0.5f, moveInterval);
+        moveTimer = UnityEngine.Random.Range(moveInterval * 0.5f, moveInterval);
 
         spriteRenderer =
             GetComponent<SpriteRenderer>();
@@ -295,19 +296,21 @@ public sealed class LevelBoss : GridActor
         return IsDestroyed;
     }
 
-    public void PlayDestroyedEffect()
+    public void PlayDestroyedEffect(
+        Action onSequenceMilestone = null)
     {
-        // Hide the boss immediately so it cannot cover the explosion.
+        // Hide the boss immediately so it cannot cover the effects.
         spriteAnimator?
             .HideVisual();
 
         if (spriteRenderer != null)
             spriteRenderer.enabled = false;
 
-        BossExplosionAnimation.Create(
+        BossExplosionController.Create(
             transform.position,
             transform.parent,
-            explosionScale);
+            explosionScale,
+            onSequenceMilestone);
     }
 
     private IEnumerator FirePattern(
@@ -584,7 +587,7 @@ public sealed class LevelBoss : GridActor
         };
 
         int startIndex =
-            Random.Range(
+            UnityEngine.Random.Range(
                 0,
                 offsets.Length);
 
@@ -896,25 +899,32 @@ public sealed class LevelBoss : GridActor
         bool destroyed =
             Hit();
 
-        MineGameManager.Instance?
-            .PlayHitPause(
-                destroyed
-                    ? 0.18f
-                    : 0.10f);
+        if (!destroyed)
+        {
+            MineGameManager.Instance?
+                .PlayHitPause(
+                    0.10f);
+        }
+
+        MineGameManager game =
+            MineGameManager.Instance;
 
         MineBoard board =
-            MineGameManager.Instance?
+            game?
                 .Board;
 
         if (destroyed)
         {
-            PlayDestroyedEffect();
+            Action objectiveCallback =
+                game != null
+                    ? game.OnBossDestroyed
+                    : null;
+
+            PlayDestroyedEffect(
+                objectiveCallback);
 
             if (board != null)
                 board.RemoveBoss(this);
-
-            MineGameManager.Instance?
-                .OnBossDestroyed();
 
             return;
         }

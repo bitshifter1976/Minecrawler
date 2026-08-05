@@ -10,9 +10,9 @@ using Debug = UnityEngine.Debug;
 
 public sealed class MineGameManager : MonoBehaviour
 {
-    public static readonly string Version = "v0.5";
+    public static readonly string Version = "v0.6";
     // if set higher than 0, the game will start at that level instead of the last saved level.
-    public static readonly int StartLevelIndex = 9;
+    public static readonly int StartLevelIndex = 0;
 
     private IDisposable startInputSubscription;
     private const int LevelCount = 100;
