@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public enum BossAttackPattern
@@ -45,12 +46,16 @@ public sealed class LevelBoss : GridActor
     private float moveInterval;
     private float moveDuration;
 
-    private float wobbleTime;
-    private float wobbleSpeed;
-    private float wobbleAngle;
-
     [Header("Visual")]
-    [SerializeField] private float bossScale = 0.92f;
+    [Tooltip("Visual scale only. Grid position and collision remain one tile.")]
+    [SerializeField, Range(1f, 2.5f)]
+    private float bossVisualScale = 1.78f;
+
+    [SerializeField, Range(-0.5f, 0.5f)]
+    private float bossVisualOffsetY = 0.10f;
+
+    [SerializeField, Range(1f, 3.5f)]
+    private float explosionScale = 2.25f;
 
     [Header("Combat")]
     [SerializeField] private float minimumFireDistance = 2.25f;
@@ -82,8 +87,8 @@ public sealed class LevelBoss : GridActor
         float progress =
             (bossTier - 1f) / 9f;
 
-        maximumHitPoints = 1;
-        hitPoints = 1;
+        maximumHitPoints = bossTier + 1;
+        hitPoints = maximumHitPoints;
 
         fireInterval =
             Mathf.Lerp(
@@ -136,9 +141,6 @@ public sealed class LevelBoss : GridActor
         moveDuration = Mathf.Lerp(0.72f, 0.48f, progress);
         moveTimer = Random.Range(moveInterval * 0.5f, moveInterval);
 
-        wobbleSpeed = Mathf.Lerp(2.1f, 3.8f, progress);
-        wobbleAngle = Mathf.Lerp(3.5f, 7f, progress);
-
         spriteRenderer =
             GetComponent<SpriteRenderer>();
 
@@ -155,9 +157,16 @@ public sealed class LevelBoss : GridActor
 
         spriteAnimator =
             GetComponent<LevelBossSpriteAnimator>();
-        transform.localScale =
-            Vector3.one * bossScale;
 
+        // Keep the logical GridActor transform at scale 1.
+        // Only the animator's visual child is enlarged.
+        transform.localScale =
+            Vector3.one;
+
+        spriteAnimator?
+            .ConfigureVisual(
+                bossVisualScale,
+                bossVisualOffsetY);
     }
 
     // füge optional eine Stun-Methode hinzu, damit movementBlockedUntil genutzt werden kann:
@@ -168,8 +177,6 @@ public sealed class LevelBoss : GridActor
 
     private void Update()
     {
-        AnimateWobble();
-
         MineGameManager game =
             MineGameManager.Instance;
 
@@ -213,6 +220,11 @@ public sealed class LevelBoss : GridActor
         Vector2Int currentPosition,
         Vector2Int targetPosition)
     {
+        // Deliberately independent from bossVisualScale.
+        // The boss occupies exactly one logical grid tile.
+        const float targetRadius = 0.58f;
+        const float sweptRadius = 0.46f;
+
         if (GridPosition == targetPosition)
             return true;
 
@@ -226,7 +238,7 @@ public sealed class LevelBoss : GridActor
 
         if (Vector2.Distance(
                 bossPosition,
-                target) <= 0.58f)
+                target) <= targetRadius)
         {
             return true;
         }
@@ -258,7 +270,7 @@ public sealed class LevelBoss : GridActor
 
         return Vector2.Distance(
             bossPosition,
-            closest) <= 0.46f;
+            closest) <= sweptRadius;
     }
 
     public void ReserveGridPosition(
@@ -269,21 +281,33 @@ public sealed class LevelBoss : GridActor
 
     public bool Hit()
     {
-        // The Mine Guardian is an avoidance hazard and cannot be damaged.
-        return false;
+        if (IsDestroyed)
+            return true;
+
+        hitPoints =
+            Mathf.Max(
+                0,
+                hitPoints - 1);
+
+        spriteAnimator?
+            .PlayHit();
+
+        return IsDestroyed;
     }
 
     public void PlayDestroyedEffect()
     {
+        // Hide the boss immediately so it cannot cover the explosion.
+        spriteAnimator?
+            .HideVisual();
+
+        if (spriteRenderer != null)
+            spriteRenderer.enabled = false;
+
         BossExplosionAnimation.Create(
             transform.position,
-            transform.parent);
-
-        Camera.main?
-            .GetComponent<CameraShake>()?
-            .Shake(
-                0.65f,
-                0.24f);
+            transform.parent,
+            explosionScale);
     }
 
     private IEnumerator FirePattern(
@@ -295,6 +319,13 @@ public sealed class LevelBoss : GridActor
             GetCardinalDirection(
                 miner.transform.position -
                 transform.position);
+
+        spriteAnimator?
+            .FaceDirection(
+                aimed);
+
+        spriteAnimator?
+            .PlayAttack();
 
         switch (attackPattern)
         {
@@ -780,6 +811,9 @@ public sealed class LevelBoss : GridActor
             .SetMovementDirection(
                 direction);
 
+        spriteAnimator?
+            .SetMoving(true);
+
         Vector3 start =
             transform.position;
 
@@ -813,6 +847,9 @@ public sealed class LevelBoss : GridActor
 
         transform.position = target;
 
+        spriteAnimator?
+            .SetMoving(false);
+
         MineGameManager game =
             MineGameManager.Instance;
 
@@ -821,41 +858,6 @@ public sealed class LevelBoss : GridActor
             game.State == GameState.Playing
                 ? BossState.Waiting
                 : BossState.Waiting;
-    }
-
-    private void AnimateWobble()
-    {
-        wobbleTime += Time.deltaTime;
-
-        float angle =
-            Mathf.Sin(
-                wobbleTime *
-                wobbleSpeed) *
-            wobbleAngle;
-
-        transform.localRotation =
-            Quaternion.Euler(
-                0f,
-                0f,
-                angle);
-    }
-
-    private IEnumerator HitFlash()
-    {
-        if (spriteRenderer == null)
-            yield break;
-
-        Color original =
-            spriteRenderer.color;
-
-        spriteRenderer.color =
-            Color.white;
-
-        yield return new WaitForSeconds(
-            0.08f);
-
-        if (spriteRenderer != null)
-            spriteRenderer.color = original;
     }
 
     private static BossAttackPattern GetAttackPattern(
@@ -883,5 +885,84 @@ public sealed class LevelBoss : GridActor
         return difference.y >= 0f
             ? Vector2.up
             : Vector2.down;
+    }
+
+    public void OnMinerBump(
+        Vector2Int minerGridPosition)
+    {
+        if (IsDestroyed)
+            return;
+
+        bool destroyed =
+            Hit();
+
+        MineGameManager.Instance?
+            .PlayHitPause(
+                destroyed
+                    ? 0.18f
+                    : 0.10f);
+
+        MineBoard board =
+            MineGameManager.Instance?
+                .Board;
+
+        if (destroyed)
+        {
+            PlayDestroyedEffect();
+
+            if (board != null)
+                board.RemoveBoss(this);
+
+            MineGameManager.Instance?
+                .OnBossDestroyed();
+
+            return;
+        }
+
+        if (board == null)
+            return;
+
+        Vector2Int push =
+            GridPosition -
+            minerGridPosition;
+
+        if (push == Vector2Int.zero)
+            push = Vector2Int.right;
+
+        List<Vector2Int> candidates =
+            new()
+            {
+                GridPosition + push,
+                GridPosition + Vector2Int.up,
+                GridPosition + Vector2Int.right,
+                GridPosition + Vector2Int.down,
+                GridPosition + Vector2Int.left
+            };
+
+        foreach (Vector2Int target in candidates)
+        {
+            if (!board.IsInside(target))
+                continue;
+
+            if (!board.TryReserveBossMove(
+                    this,
+                    target))
+            {
+                continue;
+            }
+
+            movementBlockedUntil =
+                Time.time + 0.45f;
+
+            StartCoroutine(
+                MoveToGridPosition(
+                    target));
+
+            return;
+        }
+
+        // No free push position: the boss remains alive and is briefly stunned.
+        StunForSeconds(
+            0.35f);
     }
 }

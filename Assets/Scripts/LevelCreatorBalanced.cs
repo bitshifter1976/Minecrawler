@@ -148,7 +148,7 @@ public static class LevelCreatorBalanced
             int targetCoal = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(6, 12, progress)), 0, interior.Count);   // moderate start
             int targetRocks = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(0, 30, progress)), 0, interior.Count); // few rocks early
             int targetWalls = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(0, 20, progress)), 0, interior.Count); // few walls early
-            int targetBosses = (level % 10 == 0) ? 1 : 0;
+            int targetBosses = (level % 5 == 0) ? 1 : 0;
 
             int reserved = 0;
             if (player.HasValue) reserved++;

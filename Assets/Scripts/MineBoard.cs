@@ -47,7 +47,8 @@ public sealed class MineBoard
     }
     public bool IsLevelCleared =>
         RemainingCoal == 0 &&
-        RemainingObstacles == 0;
+        RemainingObstacles == 0 &&
+        RemainingBosses == 0;
     public MineTail Tail => tail;
     public KeyPickup SpawnedKey => spawnedKey;
 

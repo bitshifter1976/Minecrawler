@@ -1,4 +1,3 @@
-using NUnit.Framework;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -372,15 +371,10 @@ public sealed class MineGameManager : MonoBehaviour
         if (State == GameState.Loading)
             return;
 
-        score =
-            PlayerPrefs.GetInt(
-                "Score",
-                0);
-
-        currentLevelIndex =
-            PlayerPrefs.GetInt(
-                "CurrentLevel",
-                currentLevelIndex);
+        // Restore the checkpoint values, but retain the level that is currently active.
+        score = PlayerPrefs.GetInt("Score", 0);
+        moves = PlayerPrefs.GetInt("Moves", 0);
+        playTimeTracker.TotalPlayTime = PlayerPrefs.GetFloat("Playtime", 0f);
 
         LoadLevel(currentLevelIndex);
     }
@@ -402,7 +396,7 @@ public sealed class MineGameManager : MonoBehaviour
         message = "Collect all coal and destroy all rocks. collect the key and reach the exit.";
         var levelWithBoss = new List<int>() { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 };
         if (levelWithBoss.Contains(CurrentLevel))
-            message = "Collect all coal and destroy all rocks. Avoid the boss and reach the exit.";
+            message = "Collect all coal, destroy all rocks and defeat the boss. Then collect the key and reach the exit.";
         else
             message = "Collect all coal and destroy all rocks. Collect the key and reach the exit.";
         PlayAmbience();
@@ -539,25 +533,23 @@ public sealed class MineGameManager : MonoBehaviour
             return false;
         }
 
-        LevelBoss boss =
-            board.FindBossBlockingMove(
-                currentPosition,
-                targetPosition);
-
+        var boss = board.FindBossBlockingMove(currentPosition, targetPosition);
         if (boss != null)
         {
             moves++;
 
             Camera.main?
                 .GetComponent<CameraShake>()?
-                .Shake(
-                    0.55f,
-                    0.18f);
+                .Shake(0.55f, 0.18f);
 
-            TriggerGameOver(
-                "You crashed into the boss!");
+            // Der Boss nimmt 1 HP, wird verschoben oder stirbt.
+            boss.OnMinerBump(currentPosition);
 
-            return false;
+            // Nach OnMinerBump ist das Ziel in der Regel frei (Boss verschoben oder tot).
+            // Falls ausnahmsweise noch ein Boss auf dem Ziel ist, blockieren wir die Bewegung.
+            if (board.GetBoss(targetPosition) != null)
+                return false;
+            // ansonsten Miner fährt weiter (keine GameOver-Behandlung hier)
         }
 
         if (board.IsWall(targetPosition))
@@ -621,6 +613,12 @@ public sealed class MineGameManager : MonoBehaviour
         return true;
     }
 
+    public void OnBossDestroyed()
+    {
+        // Prüfe, ob Level jetzt erfüllt ist (alle Kohlen, Felsen und Bosse beseitigt)
+        CheckLevelCleared();
+    }
+
     private void TriggerGameOver(string reason)
     {
         if (State != GameState.Playing)
@@ -659,7 +657,11 @@ public sealed class MineGameManager : MonoBehaviour
     {
         if (!board.ExitOpen)
         {
-            message = $"The exit is closed. {board.RemainingCoal} coal and {board.RemainingObstacles} rocks remaining.";
+            message =
+                $"The exit is closed. " +
+                $"{board.RemainingCoal} coal, " +
+                $"{board.RemainingObstacles} rocks and " +
+                $"{board.RemainingBosses} bosses remaining.";
             return false;
         }
 
@@ -764,6 +766,27 @@ public sealed class MineGameManager : MonoBehaviour
         message = GetRemainingObjectivesMessage();
     }
 
+    public void PlayHitPause(float seconds = 0.12f)
+    {
+        // Play small destroy sound
+        if (audioSourceFx != null)
+        {
+            AudioClip clip = Resources.Load<AudioClip>("Audio/destroy");
+            if (clip != null)
+                audioSourceFx.PlayOneShot(clip, 0.25f);
+        }
+
+        // Start real-time freeze so gameplay feels "stunned" briefly
+        StartCoroutine(BriefFreezeRealtime(seconds));
+    }
+
+    private IEnumerator BriefFreezeRealtime(float seconds)
+    {
+        float previousTimeScale = Time.timeScale;
+        Time.timeScale = 0f;
+        yield return new WaitForSecondsRealtime(seconds);
+        Time.timeScale = previousTimeScale;
+    }
 
     private string GetRemainingObjectivesMessage()
     {
@@ -771,8 +794,9 @@ public sealed class MineGameManager : MonoBehaviour
             return string.Empty;
 
         return
-            $"{board.RemainingCoal} coal and " +
-            $"{board.RemainingObstacles} rocks remaining.";
+            $"{board.RemainingCoal} coal, " +
+            $"{board.RemainingObstacles} rocks and " +
+            $"{board.RemainingBosses} bosses remaining.";
     }
 
     public void BossProjectileHit()
