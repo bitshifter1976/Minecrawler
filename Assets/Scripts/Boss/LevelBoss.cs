@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public enum BossAttackPattern
 {
@@ -64,6 +65,7 @@ public sealed class LevelBoss : GridActor
     private BossAttackPattern attackPattern;
     private SpriteRenderer spriteRenderer;
     private LevelBossSpriteAnimator spriteAnimator;
+    private BossMineManager mineManager;
 
     public int HitPoints => hitPoints;
     public int MaximumHitPoints => maximumHitPoints;
@@ -129,7 +131,7 @@ public sealed class LevelBoss : GridActor
 
         fireTimer =
             shootingEnabled
-                ? UnityEngine.Random.Range(
+                ? Random.Range(
                     fireInterval * 0.55f,
                     fireInterval)
                 : float.PositiveInfinity;
@@ -140,7 +142,7 @@ public sealed class LevelBoss : GridActor
         // Der Boss bewegt sich bewusst deutlich langsamer als der Miner.
         moveInterval = Mathf.Lerp(2.65f, 1.55f, progress);
         moveDuration = Mathf.Lerp(0.72f, 0.48f, progress);
-        moveTimer = UnityEngine.Random.Range(moveInterval * 0.5f, moveInterval);
+        moveTimer = Random.Range(moveInterval * 0.5f, moveInterval);
 
         spriteRenderer =
             GetComponent<SpriteRenderer>();
@@ -168,6 +170,19 @@ public sealed class LevelBoss : GridActor
             .ConfigureVisual(
                 bossVisualScale,
                 bossVisualOffsetY);
+
+        mineManager =
+            GetComponent<BossMineManager>();
+
+        if (mineManager == null)
+        {
+            mineManager =
+                gameObject.AddComponent<BossMineManager>();
+        }
+
+        mineManager.Initialize(
+            this,
+            difficulty);
     }
 
     // füge optional eine Stun-Methode hinzu, damit movementBlockedUntil genutzt werden kann:
@@ -566,79 +581,8 @@ public sealed class LevelBoss : GridActor
 
     private void SpawnMine()
     {
-        MineGameManager game =
-            MineGameManager.Instance;
-
-        MineBoard board =
-            game?.Board;
-
-        if (board == null ||
-            board.Miner == null)
-        {
-            return;
-        }
-
-        Vector2Int[] offsets =
-        {
-            Vector2Int.up,
-            Vector2Int.right,
-            Vector2Int.down,
-            Vector2Int.left
-        };
-
-        int startIndex =
-            UnityEngine.Random.Range(
-                0,
-                offsets.Length);
-
-        for (int index = 0;
-             index < offsets.Length;
-             index++)
-        {
-            Vector2Int position =
-                GridPosition +
-                offsets[
-                    (startIndex + index) %
-                    offsets.Length];
-
-            if (!IsFreeMinePosition(
-                    board,
-                    position))
-            {
-                continue;
-            }
-
-            GameObject mineObject =
-                new("Boss Mine");
-
-            mineObject.transform.SetParent(
-                transform.parent);
-
-            BossMine mine =
-                mineObject.AddComponent<BossMine>();
-
-            mine.Initialize(
-                position,
-                4.5f,
-                0.42f);
-
-            return;
-        }
-    }
-
-    private static bool IsFreeMinePosition(
-        MineBoard board,
-        Vector2Int position)
-    {
-        return
-            board.IsInside(position) &&
-            !board.IsWall(position) &&
-            !board.IsExit(position) &&
-            board.GetObstacle(position) == null &&
-            board.GetBoss(position) == null &&
-            board.GetCoal(position) == null &&
-            board.Miner.GridPosition != position &&
-            !board.Tail.Contains(position);
+        mineManager?
+            .TryDropMineNearBoss();
     }
 
 
@@ -806,9 +750,19 @@ public sealed class LevelBoss : GridActor
     {
         state = BossState.Moving;
 
+        // TryReserveBossMove() has already changed GridPosition.
+        // The actual previous field is read from the current world position.
+        Vector3 start =
+            transform.position;
+
+        Vector2Int previousGridPosition =
+            new(
+                Mathf.RoundToInt(start.x),
+                Mathf.RoundToInt(start.y));
+
         Vector2Int direction =
             targetPosition -
-            GridPosition;
+            previousGridPosition;
 
         spriteAnimator?
             .SetMovementDirection(
@@ -816,9 +770,6 @@ public sealed class LevelBoss : GridActor
 
         spriteAnimator?
             .SetMoving(true);
-
-        Vector3 start =
-            transform.position;
 
         Vector3 target =
             new(
@@ -852,6 +803,11 @@ public sealed class LevelBoss : GridActor
 
         spriteAnimator?
             .SetMoving(false);
+
+        mineManager?
+            .NotifyBossMoved(
+                previousGridPosition,
+                direction);
 
         MineGameManager game =
             MineGameManager.Instance;
@@ -915,6 +871,7 @@ public sealed class LevelBoss : GridActor
 
         if (destroyed)
         {
+            // Existing mines remain active after the boss dies.
             Action objectiveCallback =
                 game != null
                     ? game.OnBossDestroyed
